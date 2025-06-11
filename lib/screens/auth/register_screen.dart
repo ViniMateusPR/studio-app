@@ -1,8 +1,7 @@
-// lib/screens/register/register_screen.dart
 import 'package:flutter/material.dart';
+import 'package:studio_app/screens/home/home_empresa_screen.dart';
 import '../../services/auth_service.dart';
-import '../../services/api_service.dart'; // <-- import necessário
-import '../home/home_screen.dart';
+import '../../services/api_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -38,12 +37,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     if (success) {
-      await ApiService.init(); // <-- carrega token e empresaId
-      print('empresaId após cadastro: ${ApiService.empresaId}');
-
+      await ApiService.init(); // carrega token e empresaId
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const HomeEmpresaScreen()),
       );
     } else {
       setState(() {
@@ -55,38 +52,113 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Registrar Empresa")),
+      backgroundColor: const Color(0xFF121212),
+      appBar: AppBar(
+        automaticallyImplyLeading: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        backgroundColor: const Color(0xFF121212),
+        foregroundColor: Colors.white,
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SizedBox(height: 80),
+            Text(
+              'Cadastro da Empresa',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.white.withOpacity(0.9),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 40),
             TextField(
               controller: _nomeController,
-              decoration: const InputDecoration(labelText: 'Nome da empresa'),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Nome da empresa',
+                hintStyle: const TextStyle(color: Colors.white70),
+                filled: true,
+                fillColor: const Color(0xFF1E1E1E),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                prefixIcon: const Icon(Icons.business, color: Colors.white70),
+              ),
             ),
+            const SizedBox(height: 16),
             TextField(
               controller: _cnpjController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'CNPJ'),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'CNPJ',
+                hintStyle: const TextStyle(color: Colors.white70),
+                filled: true,
+                fillColor: const Color(0xFF1E1E1E),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                prefixIcon: const Icon(Icons.credit_card, color: Colors.white70),
+              ),
             ),
+            const SizedBox(height: 16),
             TextField(
               controller: _senhaController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Senha'),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Senha',
+                hintStyle: const TextStyle(color: Colors.white70),
+                filled: true,
+                fillColor: const Color(0xFF1E1E1E),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                prefixIcon: const Icon(Icons.lock, color: Colors.white70),
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator(color: Colors.orange))
                 : ElevatedButton(
               onPressed: _register,
-              child: const Text("Registrar"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B00),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Text(
+                "Registrar",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 40),
+            Center(
+              child: Image.asset(
+                'assets/images/logo.png',
+                height: 150,
+              ),
             ),
             if (_error != null) ...[
               const SizedBox(height: 20),
               Text(
                 _error!,
-                style: const TextStyle(color: Colors.red),
+                style: const TextStyle(color: Colors.redAccent),
+                textAlign: TextAlign.center,
               ),
             ],
           ],

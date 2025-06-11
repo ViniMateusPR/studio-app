@@ -1,24 +1,31 @@
+// Arquivo: montar_treino_professor_screen.dart
+
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../../models/aluno.dart';
 import '../../services/api_service.dart';
+import '../../services/treino_destaque_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-class MontarTreinoScreen extends StatefulWidget {
+import '../home/home_professor_screen.dart';
+
+class MontarTreinoProfessorScreen extends StatefulWidget {
   final Aluno aluno;
 
-  const MontarTreinoScreen({super.key, required this.aluno});
+  const MontarTreinoProfessorScreen({super.key, required this.aluno});
 
   @override
-  State<MontarTreinoScreen> createState() => _MontarTreinoScreenState();
+  State<MontarTreinoProfessorScreen> createState() => _MontarTreinoProfessorScreenState();
 }
 
-class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
+class _MontarTreinoProfessorScreenState extends State<MontarTreinoProfessorScreen> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   Map<String, List<dynamic>> _exerciciosPorGrupo = {};
   List<Map<String, dynamic>> _exerciciosSelecionados = [];
   List<dynamic> _treinosAnteriores = [];
   bool _loading = true;
-  bool _criandoNovo = false;
+  bool _criandoNovo = true;
   final TextEditingController _nomeTreinoController = TextEditingController();
 
   @override
@@ -35,6 +42,7 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
         _exerciciosPorGrupo = exercicios;
         _treinosAnteriores = treinos ?? [];
         _loading = false;
+        _criandoNovo = (_treinosAnteriores.isEmpty);
       });
     } catch (e) {
       print('Erro ao carregar dados: $e');
@@ -68,9 +76,9 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
       );
       Navigator.pop(context);
     } catch (e) {
-      print('Erro ao salvar treino: $e');
+      print('Erro ao salvar treino: \$e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao salvar treino: $e')),
+        SnackBar(content: Text('Erro ao salvar treino: \$e')),
       );
     }
   }
@@ -102,6 +110,110 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
     );
   }
 
+  @override
+  void dispose() {
+    _nomeTreinoController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF121212),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text('Treino de ${widget.aluno.nome}'),
+        backgroundColor: const Color(0xFFFF6B00),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+          : !_criandoNovo
+          ? Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('Último Treino', style: TextStyle(color: Colors.orange, fontSize: 18)),
+          ),
+          if (_treinosAnteriores.isNotEmpty)
+            Card(
+              color: const Color(0xFF1E1E1E),
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_treinosAnteriores.last['descricao'] ?? '',
+                        style: const TextStyle(color: Colors.white, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text('Data: ${_treinosAnteriores.last['data'] ?? ''}',
+                        style: const TextStyle(color: Colors.white70)),
+                  ],
+                ),
+              ),
+            ),
+          const Divider(color: Colors.orange, height: 32),
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('Treinos Anteriores',
+                style: TextStyle(color: Colors.orange, fontSize: 18)),
+          ),
+          Expanded(
+            child: ListView(
+              children: _treinosAnteriores.map((t) => ListTile(
+                title: Text(t['descricao'], style: const TextStyle(color: Colors.white)),
+                subtitle:
+                Text(t['data'], style: const TextStyle(color: Colors.white70)),
+                trailing: IconButton(
+                  icon: const Icon(Icons.add, color: Colors.orange),
+                  onPressed: () async {
+                    final treinoId = t['treino_id'] ?? t['id'];
+                    try {
+                      final detalhes = await ApiService.getTreinoDetalhado(treinoId);
+                      final treinoCompleto = {
+                        'aluno': {'cpf': widget.aluno.cpf, 'nome': widget.aluno.nome},
+                        'treino': detalhes,
+                      };
+                      await TreinoDestaqueService.adicionarTreinoCompleto(treinoCompleto);
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const HomeProfessorScreen()),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Erro ao buscar detalhes do treino.')),
+                      );
+                    }
+                  },
+                ),
+              ))
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => setState(() => _criandoNovo = true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Criar novo treino'),
+          )
+        ],
+      )
+          : ListView(children: [_buildFormularioNovoTreino()]),
+      floatingActionButton: _criandoNovo
+          ? FloatingActionButton.extended(
+        onPressed: _salvarTreino,
+        backgroundColor: const Color(0xFFFF6B00),
+        label: const Text("Salvar Treino"),
+        icon: const Icon(Icons.save),
+      )
+          : null,
+    );
+  }
+
   Widget _buildFormularioNovoTreino() {
     return Column(
       children: [
@@ -122,9 +234,9 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
         ..._exerciciosPorGrupo.entries.map((entry) {
           final grupo = entry.key;
           final exercicios = entry.value;
-
           return ExpansionTile(
-            title: Text(grupo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            title:
+            Text(grupo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             iconColor: Colors.orange,
             collapsedIconColor: Colors.orange,
             children: exercicios.map((exercicio) {
@@ -132,7 +244,6 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
               final nome = exercicio['nome'];
               final index = _exerciciosSelecionados.indexWhere((e) => e['exercicioId'] == id);
               final selecionado = index != -1;
-
               return Column(
                 children: [
                   CheckboxListTile(
@@ -169,76 +280,4 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
       ],
     );
   }
-
-  @override
-  void dispose() {
-    _nomeTreinoController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
-        title: Text('Treino de ${widget.aluno.nome}'),
-        backgroundColor: const Color(0xFFFF6B00),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
-          : !_criandoNovo
-          ? (_treinosAnteriores.isNotEmpty
-          ? Column(
-        children: [
-          const SizedBox(height: 16),
-          ..._treinosAnteriores.map((t) => ListTile(
-            title: Text(t['descricao'], style: const TextStyle(color: Colors.white)),
-            subtitle: Text(t['data'], style: const TextStyle(color: Colors.white70)),
-            trailing: IconButton(
-              icon: const Icon(Icons.add, color: Colors.orange),
-              onPressed: () async {
-                final treinoId = t['treino_id'] ?? t['id']; // depende de como o backend retorna
-                try {
-                  final detalhes = await ApiService.getTreinoDetalhado(treinoId);
-                  print('Treino detalhado (ID: $treinoId): $detalhes');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Treino detalhado impresso no console.')),
-                  );
-                } catch (e) {
-                  print('Erro ao buscar treino detalhado: $e');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Erro ao buscar detalhes do treino.')),
-                  );
-                }
-              },
-            ),
-
-          )),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () => setState(() => _criandoNovo = true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Criar novo treino'),
-          )
-        ],
-      )
-          : ListView(children: [_buildFormularioNovoTreino()]))
-          : ListView(children: [_buildFormularioNovoTreino()]),
-      floatingActionButton: _criandoNovo
-          ? FloatingActionButton.extended(
-        onPressed: _salvarTreino,
-        backgroundColor: const Color(0xFFFF6B00),
-        label: const Text("Salvar Treino"),
-        icon: const Icon(Icons.save),
-      )
-          : null,
-    );
-  }
-
 }

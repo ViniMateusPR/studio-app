@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:studio_app/screens/treino/treino.dart';
+import 'package:studio_app/models/treino.dart';
 
 class EditarTreinoScreen extends StatefulWidget {
   final Treino treino;

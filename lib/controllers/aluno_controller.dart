@@ -5,12 +5,12 @@ class AlunoController {
 
   static void adicionarAluno(Aluno aluno) {
     if (alunosSelecionados.length < 4 &&
-        !alunosSelecionados.any((a) => a.id == aluno.id)) {
+        !alunosSelecionados.any((a) => a.cpf == aluno.cpf)) {
       alunosSelecionados.add(aluno);
     }
   }
 
   static void removerAluno(Aluno aluno) {
-    alunosSelecionados.removeWhere((a) => a.id == aluno.id);
+    alunosSelecionados.removeWhere((a) => a.cpf == aluno.cpf);
   }
 }

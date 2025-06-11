@@ -1,17 +1,18 @@
+// ListaAlunosProfessorScreen.dart
 import 'package:flutter/material.dart';
-import 'package:studio_app/screens/home/home_professor_screen.dart';
-import 'package:studio_app/screens/treino/montar_treino_empresa_screen.dart';
+import 'package:studio_app/screens/treino/montar_treino_professor_screen.dart';
 import '../../services/api_service.dart';
 import '../../models/aluno.dart';
+import '../home/home_professor_screen.dart';
 
-class ListaAlunosScreen extends StatefulWidget {
-  const ListaAlunosScreen({super.key});
+class ListaAlunosProfessorScreen extends StatefulWidget {
+  const ListaAlunosProfessorScreen({super.key});
 
   @override
-  State<ListaAlunosScreen> createState() => _ListaAlunosScreenState();
+  State<ListaAlunosProfessorScreen> createState() => _ListaAlunosProfessorScreenState();
 }
 
-class _ListaAlunosScreenState extends State<ListaAlunosScreen> {
+class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen> {
   late Future<List<dynamic>> _futureAlunos;
   List<Aluno> _alunos = [];
   List<Aluno> _alunosFiltrados = [];
@@ -29,6 +30,7 @@ class _ListaAlunosScreenState extends State<ListaAlunosScreen> {
     _alunosFiltrados = List.from(_alunos);
     return data;
   }
+
 
   void _filtrarAlunos(String texto) {
     setState(() {
@@ -74,7 +76,7 @@ class _ListaAlunosScreenState extends State<ListaAlunosScreen> {
           } else if (snapshot.hasError) {
             return Center(
               child: Text(
-                'Erro: ${snapshot.error}',
+                'Erro: \${snapshot.error}',
                 style: const TextStyle(color: Colors.redAccent),
               ),
             );
@@ -126,7 +128,7 @@ class _ListaAlunosScreenState extends State<ListaAlunosScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => MontarTreinoEmpresaScreen(aluno: aluno),
+                                builder: (_) => MontarTreinoProfessorScreen(aluno: aluno),
                               ),
                             );
                           },
@@ -143,3 +145,4 @@ class _ListaAlunosScreenState extends State<ListaAlunosScreen> {
     );
   }
 }
+

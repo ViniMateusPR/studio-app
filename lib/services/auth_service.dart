@@ -5,7 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthService {
   final _storage = const FlutterSecureStorage();
-  final String _baseUrl = 'https://8963-2804-984-863-4d00-682e-2911-2ebb-81cb.ngrok-free.app';
+  final String _baseUrl = 'https://f8c0-168-197-141-209.ngrok-free.app';
 
   Future<bool> login({required String cnpj, required String senha}) async {
     final url = Uri.parse('$_baseUrl/auth/login');

@@ -3,16 +3,16 @@ import '../../models/aluno.dart';
 import '../../services/api_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-class MontarTreinoScreen extends StatefulWidget {
+class MontarTreinoEmpresaScreen extends StatefulWidget {
   final Aluno aluno;
 
-  const MontarTreinoScreen({super.key, required this.aluno});
+  const MontarTreinoEmpresaScreen({super.key, required this.aluno});
 
   @override
-  State<MontarTreinoScreen> createState() => _MontarTreinoScreenState();
+  State<MontarTreinoEmpresaScreen> createState() => _MontarTreinoEmpresaScreenState();
 }
 
-class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
+class _MontarTreinoEmpresaScreenState extends State<MontarTreinoEmpresaScreen> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   Map<String, List<dynamic>> _exerciciosPorGrupo = {};
   List<Map<String, dynamic>> _exerciciosSelecionados = [];
@@ -44,7 +44,6 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
 
   void _salvarTreino() async {
     try {
-      final cpfProfessor = await _storage.read(key: 'cpf');
       final nomeTreino = _nomeTreinoController.text.trim();
 
       if (nomeTreino.isEmpty) {
@@ -57,7 +56,6 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
       final treino = {
         'descricao': nomeTreino,
         'alunoCpf': widget.aluno.cpf,
-        'personalCpf': cpfProfessor,
         'data': DateTime.now().toIso8601String(),
         'exercicios': _exerciciosSelecionados
       };
@@ -183,9 +181,7 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text('Treino de ${widget.aluno.nome}'),
         backgroundColor: const Color(0xFFFF6B00),
@@ -200,25 +196,6 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
           ..._treinosAnteriores.map((t) => ListTile(
             title: Text(t['descricao'], style: const TextStyle(color: Colors.white)),
             subtitle: Text(t['data'], style: const TextStyle(color: Colors.white70)),
-            trailing: IconButton(
-              icon: const Icon(Icons.add, color: Colors.orange),
-              onPressed: () async {
-                final treinoId = t['treino_id'] ?? t['id']; // depende de como o backend retorna
-                try {
-                  final detalhes = await ApiService.getTreinoDetalhado(treinoId);
-                  print('Treino detalhado (ID: $treinoId): $detalhes');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Treino detalhado impresso no console.')),
-                  );
-                } catch (e) {
-                  print('Erro ao buscar treino detalhado: $e');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Erro ao buscar detalhes do treino.')),
-                  );
-                }
-              },
-            ),
-
           )),
           const SizedBox(height: 16),
           ElevatedButton(
@@ -240,5 +217,4 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
           : null,
     );
   }
-
 }
