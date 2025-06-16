@@ -1,4 +1,3 @@
-// ListaAlunosProfessorScreen.dart
 import 'package:flutter/material.dart';
 import 'package:studio_app/screens/treino/montar_treino_professor_screen.dart';
 import '../../services/api_service.dart';
@@ -17,6 +16,7 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
   List<Aluno> _alunos = [];
   List<Aluno> _alunosFiltrados = [];
   final TextEditingController _searchController = TextEditingController();
+  bool _mostrarAtivos = true; // já ativado por padrão
 
   @override
   void initState() {
@@ -27,17 +27,27 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
   Future<List<dynamic>> _carregarAlunos() async {
     final data = await ApiService.listarAlunos();
     _alunos = data.map((e) => Aluno.fromJson(e)).toList();
-    _alunosFiltrados = List.from(_alunos);
+    _filtrarAlunos(_searchController.text); // aplica filtro inicial com ativos
     return data;
   }
 
-
   void _filtrarAlunos(String texto) {
     setState(() {
-      _alunosFiltrados = _alunos
-          .where((a) => a.nome.toLowerCase().contains(texto.toLowerCase()))
-          .toList();
+      _alunosFiltrados = _alunos.where((a) {
+        final correspondeBusca = a.nome.toLowerCase().contains(texto.toLowerCase());
+        final correspondeStatus = !_mostrarAtivos || a.ativo == true;
+        return correspondeBusca && correspondeStatus;
+      }).toList();
     });
+  }
+
+  String capitalizarNome(String nome) {
+    return nome
+        .toLowerCase()
+        .split(' ')
+        .map((palavra) =>
+    palavra.isNotEmpty ? '${palavra[0].toUpperCase()}${palavra.substring(1)}' : '')
+        .join(' ');
   }
 
   @override
@@ -65,7 +75,6 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
           },
         ),
       ),
-
       body: FutureBuilder<List<dynamic>>(
         future: _futureAlunos,
         builder: (context, snapshot) {
@@ -76,7 +85,7 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
           } else if (snapshot.hasError) {
             return Center(
               child: Text(
-                'Erro: \${snapshot.error}',
+                'Erro: ${snapshot.error}',
                 style: const TextStyle(color: Colors.redAccent),
               ),
             );
@@ -85,21 +94,40 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
               children: [
                 Padding(
                   padding: const EdgeInsets.all(12.0),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _filtrarAlunos,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar aluno...',
-                      hintStyle: const TextStyle(color: Colors.white70),
-                      prefixIcon: const Icon(Icons.search, color: Colors.white70),
-                      filled: true,
-                      fillColor: const Color(0xFF1E1E1E),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: _filtrarAlunos,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Buscar aluno...',
+                            hintStyle: const TextStyle(color: Colors.white70),
+                            prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                            filled: true,
+                            fillColor: const Color(0xFF1E1E1E),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      FilterChip(
+                        label: const Text("Ativos", style: TextStyle(color: Colors.white)),
+                        selected: _mostrarAtivos,
+                        onSelected: (val) {
+                          setState(() {
+                            _mostrarAtivos = val;
+                            _filtrarAlunos(_searchController.text);
+                          });
+                        },
+                        selectedColor: Colors.orange,
+                        backgroundColor: const Color(0xFF1E1E1E),
+                      )
+                    ],
                   ),
                 ),
                 Expanded(
@@ -119,16 +147,25 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        margin:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: ListTile(
-                          title: Text(aluno.nome, style: const TextStyle(color: Colors.white)),
-                          subtitle: Text('Email: ${aluno.email}', style: const TextStyle(color: Colors.white70)),
-                          leading: const Icon(Icons.person, color: Color(0xFFFF6B00)),
+                          title: Text(
+                            capitalizarNome(aluno.nome),
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          subtitle: Text(
+                            'Email: ${aluno.email}',
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                          leading:
+                          const Icon(Icons.person, color: Color(0xFFFF6B00)),
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => MontarTreinoProfessorScreen(aluno: aluno),
+                                builder: (_) =>
+                                    MontarTreinoProfessorScreen(aluno: aluno),
                               ),
                             );
                           },
@@ -145,4 +182,3 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
     );
   }
 }
-

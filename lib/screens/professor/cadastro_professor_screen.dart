@@ -131,7 +131,7 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
               ),
               child: const Text(
                 "Cadastrar",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
               ),
             ),
             if (_mensagem != null)

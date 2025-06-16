@@ -7,10 +7,9 @@ class ApiService {
   static const String baseUrl = 'https://f8c0-168-197-141-209.ngrok-free.app';
   static String? token;
   static int empresaId = 0;
-
   static final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  /// Inicializa token e empresaId a partir do storage seguro
+  /// 🔐 Inicializa token e empresaId do storage seguro
   static Future<void> init() async {
     token = await _storage.read(key: 'token');
     final idStr = await _storage.read(key: 'empresaId');
@@ -19,7 +18,32 @@ class ApiService {
     }
   }
 
-  /// Método POST genérico (ex: para finalizar treino)
+  /// 🔑 Recupera CPF logado
+  static Future<String> getCpfLogado() async {
+    return await _storage.read(key: 'cpf') ?? '00000000000';
+  }
+
+  /// 🚪 Login do professor
+  static Future<Map<String, dynamic>> loginProfessor(String cpf, String senha) async {
+    final url = Uri.parse('$baseUrl/auth/professor');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'cpf': cpf, 'senha': senha}),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      await _storage.write(key: 'token', value: data['token']);
+      await _storage.write(key: 'cpf', value: data['cpf']);
+      token = data['token'];
+      return data;
+    } else {
+      throw Exception('Falha no login: ${response.body}');
+    }
+  }
+
+  /// 🔄 POST genérico
   static Future<dynamic> post(String endpoint, {required Map<String, dynamic> body}) async {
     final token = await _storage.read(key: 'token');
     final url = Uri.parse('$baseUrl$endpoint');
@@ -40,26 +64,7 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> loginProfessor(String cpf, String senha) async {
-    final url = Uri.parse('$baseUrl/auth/professor');
-
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'cpf': cpf, 'senha': senha}),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      await _storage.write(key: 'token', value: data['token']);
-      await _storage.write(key: 'cpf', value: data['cpf']);
-      token = data['token'];
-      return data;
-    } else {
-      throw Exception('Falha no login: ${response.body}');
-    }
-  }
-
+  /// 📄 Lista de alunos
   static Future<List<dynamic>> listarAlunos() async {
     final token = await AuthService().getToken();
     final url = Uri.parse('$baseUrl/aluno/listaDeAlunos');
@@ -79,6 +84,7 @@ class ApiService {
     }
   }
 
+  /// 🏋️‍♂️ Lista de exercícios agrupados por grupo muscular
   static Future<Map<String, List<dynamic>>> getExerciciosAgrupados() async {
     final token = await _storage.read(key: 'token');
     final url = Uri.parse('$baseUrl/exercicios/listar');
@@ -99,7 +105,7 @@ class ApiService {
 
     final List<String> ordemGrupos = [
       'Funcional',
-      'Abdomen',
+      'Abdômen',
       'Panturrilhas',
       'Pernas',
       'Tríceps',
@@ -125,6 +131,7 @@ class ApiService {
     return agrupado;
   }
 
+  /// 📑 Lista de todos os exercícios
   static Future<List<dynamic>> getExercicios() async {
     final token = await _storage.read(key: 'token');
     final url = Uri.parse('$baseUrl/exercicios/listar');
@@ -141,6 +148,7 @@ class ApiService {
     }
   }
 
+  /// 📅 Lista treinos de um aluno
   static Future<List<dynamic>> listarTreinosPorAluno(String cpfAluno) async {
     final token = await _storage.read(key: 'token');
     final url = Uri.parse('$baseUrl/treinos/aluno/$cpfAluno');
@@ -160,27 +168,7 @@ class ApiService {
     }
   }
 
-  static Future<void> salvarTreino(String cpfAluno, List<String> idsExercicios) async {
-    final token = await _storage.read(key: 'token');
-    final url = Uri.parse('$baseUrl/treino');
-
-    final response = await http.post(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'cpfAluno': cpfAluno,
-        'exercicios': idsExercicios,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Erro ao salvar treino');
-    }
-  }
-
+  /// ✅ Salvar treino detalhado
   static Future<void> salvarTreinoDetalhado(Map<String, dynamic> treino) async {
     final token = await _storage.read(key: 'token');
 
@@ -198,6 +186,7 @@ class ApiService {
     }
   }
 
+  /// 🔍 Buscar treino detalhado
   static Future<Map<String, dynamic>> getTreinoDetalhado(int treinoId) async {
     final token = await _storage.read(key: 'token');
 
@@ -216,6 +205,7 @@ class ApiService {
     }
   }
 
+  /// 🏁 Finalizar treino
   static Future<void> finalizarTreino({
     required int treinoId,
     required String alunoCpf,
@@ -239,12 +229,30 @@ class ApiService {
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception('Erro ao finalizar treino: ${response.body}');
     }
-
-    // ⚠️ NUNCA faça jsonDecode aqui, já que o body está vazio
   }
 
+  /// ✍️ Atualizar treino detalhado (com CPF do professor no header)
+  static Future<void> atualizarTreinoDetalhado(int id, Map<String, dynamic> treinoJson) async {
+    final token = await _storage.read(key: 'token');
+    final cpf = await getCpfLogado();
+    final url = Uri.parse('$baseUrl/treinos/$id');
 
+    final response = await http.put(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'cpfProfessor': cpf, // <- CPF logado enviado no header
+      },
+      body: jsonEncode(treinoJson),
+    );
 
+    if (response.statusCode != 200) {
+      throw Exception('Erro ao atualizar treino: ${response.body}');
+    }
+  }
+
+  /// 👨‍🏫 Lista de professores
   static Future<List<dynamic>> getProfessores() async {
     final url = Uri.parse('$baseUrl/professores');
 

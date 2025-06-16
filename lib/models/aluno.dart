@@ -4,25 +4,27 @@ class Aluno {
   final String email;
   final String? celular;
   final bool? ativo;
+  final int? ultimoTreinoId;
   final int? empresaId;
 
   Aluno({
     required this.cpf,
     required this.nome,
+    required this.celular,
     required this.email,
-    this.celular,
-    this.ativo,
-    this.empresaId,
+    required this.ativo,
+    this.ultimoTreinoId,
+    required this.empresaId,
   });
 
-  // ✅ Adicione este método:
   factory Aluno.fromJson(Map<String, dynamic> json) {
     return Aluno(
-      cpf: json['cpf'] ?? '',
-      nome: json['nome'] ?? '',
-      email: json['email'] ?? '',
+      cpf: json['cpf'],
+      nome: json['nome'],
       celular: json['celular'],
+      email: json['email'],
       ativo: json['ativo'],
+      ultimoTreinoId: json['ultimoTreinoId'],
       empresaId: json['empresaId'],
     );
   }
