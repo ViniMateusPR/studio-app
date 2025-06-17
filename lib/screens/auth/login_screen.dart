@@ -1,4 +1,3 @@
-// lib/screens/auth/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:studio_app/screens/auth/register_screen.dart';
 import 'package:studio_app/screens/auth/login_professor_screen.dart';
@@ -26,15 +25,19 @@ class _LoginScreenState extends State<LoginScreen> {
       _loading = true;
       _error = null;
     });
+
     final ok = await AuthService().login(
       cnpj: _cnpjCtrl.text.trim(),
       senha: _senhaCtrl.text.trim(),
     );
+
     setState(() => _loading = false);
+
     if (!ok) {
       setState(() => _error = 'CNPJ ou senha inválidos.');
       return;
     }
+
     await ApiService.init();
     Navigator.pushReplacement(
       context,
@@ -49,119 +52,11 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  const SizedBox(height: 60),
-                  Text(
-                    'Bem-vindo!',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 40),
-                  TextFormField(
-                    controller: _cnpjCtrl,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _inputDecoration(
-                      hint: 'CNPJ',
-                      icon: Icons.business,
-                    ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Informe o CNPJ';
-                      if (v.length < 14) return 'CNPJ incompleto';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _senhaCtrl,
-                    obscureText: !_showPassword,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _inputDecoration(
-                      hint: 'Senha',
-                      icon: Icons.lock,
-                    ).copyWith(
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _showPassword ? Icons.visibility_off : Icons.visibility,
-                          color: Colors.white70,
-                        ),
-                        onPressed: () => setState(() => _showPassword = !_showPassword),
-                      ),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Informe a senha';
-                      if (v.length < 4) return 'Senha muito curta';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-                    ),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF6B00),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      child: _loading
-                          ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
-                          : const Text(
-                        'Entrar',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _loading
-                        ? null
-                        : () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
-                    child: const Text('Registrar sua empresa', style: TextStyle(color: Colors.orangeAccent)),
-                  ),
-                  TextButton(
-                    onPressed: _loading
-                        ? null
-                        : () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginProfessorScreen())),
-                    child: const Text('Login Professor', style: TextStyle(color: Colors.orangeAccent)),
-                  ),
-                  const SizedBox(height: 40),
-                  Image.asset('assets/images/logo.png', height: 120),
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration({required String hint, required IconData icon}) {
+  InputDecoration _inputDecoration({
+    required String hint,
+    required IconData icon,
+    Widget? suffix,
+  }) {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(color: Colors.white70),
@@ -172,6 +67,162 @@ class _LoginScreenState extends State<LoginScreen> {
         borderSide: BorderSide.none,
       ),
       prefixIcon: Icon(icon, color: Colors.white70),
+      suffixIcon: suffix,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF121212),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 60),
+                    Text(
+                      'Bem-vindo, ao FitManager!',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 40),
+
+                    // CNPJ
+                    TextFormField(
+                      controller: _cnpjCtrl,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _inputDecoration(
+                        hint: 'CNPJ',
+                        icon: Icons.credit_card,
+                      ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Informe o CNPJ';
+                        if (v.length < 14) return 'CNPJ incompleto';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Senha
+                    TextFormField(
+                      controller: _senhaCtrl,
+                      obscureText: !_showPassword,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: _inputDecoration(
+                        hint: 'Senha',
+                        icon: Icons.lock,
+                        suffix: IconButton(
+                          icon: Icon(
+                            _showPassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.white70,
+                          ),
+                          onPressed: () =>
+                              setState(() => _showPassword = !_showPassword),
+                        ),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Informe a senha';
+                        if (v.length < 4) return 'Senha muito curta';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Erro
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.redAccent),
+                        ),
+                      ),
+
+                    // Botão Entrar
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : _login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6B00),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: _loading
+                            ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                            : const Text(
+                          'Entrar',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Links
+                    TextButton(
+                      onPressed: _loading
+                          ? null
+                          : () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const RegisterScreen()),
+                      ),
+                      child: const Text(
+                        'Registrar sua empresa',
+                        style: TextStyle(color: Colors.orangeAccent),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _loading
+                          ? null
+                          : () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                            const LoginProfessorScreen()),
+                      ),
+                      child: const Text(
+                        'Login Professor',
+                        style: TextStyle(color: Colors.orangeAccent),
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
+                    Image.asset('assets/images/logo.png', height: 120),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
