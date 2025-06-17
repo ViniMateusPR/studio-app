@@ -1,7 +1,8 @@
+// lib/services/api_service.dart
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'auth_service.dart';
 
 class ApiService {
   static const String baseUrl = 'https://f8c0-168-197-141-209.ngrok-free.app';
@@ -9,7 +10,7 @@ class ApiService {
   static int empresaId = 0;
   static final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  /// 🔐 Inicializa token e empresaId do storage seguro
+  /// Inicializa token e empresaId do storage seguro
   static Future<void> init() async {
     token = await _storage.read(key: 'token');
     final idStr = await _storage.read(key: 'empresaId');
@@ -18,194 +19,137 @@ class ApiService {
     }
   }
 
-  /// 🔑 Recupera CPF logado
-  static Future<String> getCpfLogado() async {
-    return await _storage.read(key: 'cpf') ?? '00000000000';
+  /// Recupera o CPF do professor logado
+  static Future<String?> getCpfLogado() async {
+    return await _storage.read(key: 'cpf');
   }
 
-  /// 🚪 Login do professor
-  static Future<Map<String, dynamic>> loginProfessor(String cpf, String senha) async {
-    final url = Uri.parse('$baseUrl/auth/professor');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'cpf': cpf, 'senha': senha}),
+  /// Genérico GET
+  static Future<dynamic> get(String endpoint) async {
+    final t = token ?? await _storage.read(key: 'token');
+    final resp = await http.get(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (t != null) 'Authorization': 'Bearer $t',
+      },
     );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      await _storage.write(key: 'token', value: data['token']);
-      await _storage.write(key: 'cpf', value: data['cpf']);
-      token = data['token'];
-      return data;
-    } else {
-      throw Exception('Falha no login: ${response.body}');
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      return jsonDecode(resp.body);
     }
+    throw Exception('Erro GET $endpoint: ${resp.statusCode} ${resp.body}');
   }
 
-  /// 🔄 POST genérico
+  /// Genérico POST
   static Future<dynamic> post(String endpoint, {required Map<String, dynamic> body}) async {
-    final token = await _storage.read(key: 'token');
-    final url = Uri.parse('$baseUrl$endpoint');
-
-    final response = await http.post(
-      url,
+    final t = token ?? await _storage.read(key: 'token');
+    final resp = await http.post(
+      Uri.parse('$baseUrl$endpoint'),
       headers: {
         'Content-Type': 'application/json; charset=UTF-8',
-        if (token != null) 'Authorization': 'Bearer $token',
+        if (t != null) 'Authorization': 'Bearer $t',
       },
       body: jsonEncode(body),
     );
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Erro POST $endpoint: ${response.statusCode} ${response.body}');
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      return jsonDecode(resp.body);
     }
+    throw Exception('Erro POST $endpoint: ${resp.statusCode} ${resp.body}');
   }
 
-  /// 📄 Lista de alunos
-  static Future<List<dynamic>> listarAlunos() async {
-    final token = await AuthService().getToken();
-    final url = Uri.parse('$baseUrl/aluno/listaDeAlunos');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Falha ao carregar alunos: ${response.statusCode}');
-    }
-  }
-
-  /// 🏋️‍♂️ Lista de exercícios agrupados por grupo muscular
-  static Future<Map<String, List<dynamic>>> getExerciciosAgrupados() async {
-    final token = await _storage.read(key: 'token');
-    final url = Uri.parse('$baseUrl/exercicios/listar');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Erro ao buscar exercícios');
-    }
-
-    final List<dynamic> lista = jsonDecode(response.body);
-
-    final List<String> ordemGrupos = [
-      'Funcional',
-      'Abdômen',
-      'Panturrilhas',
-      'Pernas',
-      'Tríceps',
-      'Bíceps',
-      'Ombros',
-      'Costas',
-      'Peito',
-    ];
-
-    final Map<String, List<dynamic>> agrupado = {
-      for (var grupo in ordemGrupos) grupo: []
-    };
-
-    for (var exercicio in lista) {
-      final grupo = exercicio['grupoMuscular'];
-      if (agrupado.containsKey(grupo)) {
-        agrupado[grupo]!.add(exercicio);
-      } else {
-        agrupado.putIfAbsent(grupo, () => [exercicio]);
-      }
-    }
-
-    return agrupado;
-  }
-
-  /// 📑 Lista de todos os exercícios
-  static Future<List<dynamic>> getExercicios() async {
-    final token = await _storage.read(key: 'token');
-    final url = Uri.parse('$baseUrl/exercicios/listar');
-
-    final response = await http.get(url, headers: {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-    });
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Erro ao buscar exercícios');
-    }
-  }
-
-  /// 📅 Lista treinos de um aluno
-  static Future<List<dynamic>> listarTreinosPorAluno(String cpfAluno) async {
-    final token = await _storage.read(key: 'token');
-    final url = Uri.parse('$baseUrl/treinos/aluno/$cpfAluno');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Erro ao listar treinos do aluno: ${response.body}');
-    }
-  }
-
-  /// ✅ Salvar treino detalhado
+  /// POST para salvar treino detalhado
   static Future<void> salvarTreinoDetalhado(Map<String, dynamic> treino) async {
-    final token = await _storage.read(key: 'token');
-
-    final response = await http.post(
+    final t = token ?? await _storage.read(key: 'token');
+    final resp = await http.post(
       Uri.parse('$baseUrl/treinos/salvar'),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
+        if (t != null) 'Authorization': 'Bearer $t',
       },
       body: jsonEncode(treino),
     );
-
-    if (response.statusCode != 201) {
-      throw Exception('Erro ao salvar treino: ${response.body}');
+    if (resp.statusCode != 201 && resp.statusCode != 200) {
+      throw Exception('Erro ao salvar treino: ${resp.body}');
     }
   }
 
-  /// 🔍 Buscar treino detalhado
-  static Future<Map<String, dynamic>> getTreinoDetalhado(int treinoId) async {
-    final token = await _storage.read(key: 'token');
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/treinos/$treinoId/detalhado'),
+  /// PUT para atualizar treino detalhado
+  static Future<void> atualizarTreinoDetalhado(int id, Map<String, dynamic> json) async {
+    final t = token ?? await _storage.read(key: 'token');
+    final cpfProf = await getCpfLogado();
+    final resp = await http.put(
+      Uri.parse('$baseUrl/treinos/$id'),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
+        if (t != null) 'Authorization': 'Bearer $t',
+        if (cpfProf != null) 'cpfProfessor': cpfProf,
       },
+      body: jsonEncode(json),
     );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Erro ao buscar treino detalhado: ${response.body}');
+    if (resp.statusCode != 200) {
+      throw Exception('Erro ao atualizar treino: ${resp.body}');
     }
   }
 
-  /// 🏁 Finalizar treino
+  /// DELETE para excluir treino
+  static Future<void> excluirTreino(int id) async {
+    final t = token ?? await _storage.read(key: 'token');
+    final resp = await http.delete(
+      Uri.parse('$baseUrl/treinos/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (t != null) 'Authorization': 'Bearer $t',
+      },
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('Erro ao deletar treino: ${resp.body}');
+    }
+  }
+
+  /// Lista de alunos
+  static Future<List<dynamic>> listarAlunos() async {
+    final data = await get('/aluno/listaDeAlunos');
+    return (data as List<dynamic>);
+  }
+
+  /// Lista de exercícios
+  static Future<List<dynamic>> getExercicios() async {
+    final data = await get('/exercicios/listar');
+    return (data as List<dynamic>);
+  }
+
+  /// Exercícios agrupados por grupo muscular
+  static Future<Map<String, List<dynamic>>> getExerciciosAgrupados() async {
+    final lista = await getExercicios();
+    const ordem = [
+      'Funcional','Abdômen','Panturrilhas','Pernas',
+      'Tríceps','Bíceps','Ombros','Costas','Peito'
+    ];
+    final agrupado = <String, List<dynamic>>{ for (var g in ordem) g: [] };
+    for (var ex in lista) {
+      final g = ex['grupoMuscular'] as String? ?? 'Outro';
+      if (agrupado.containsKey(g)) {
+        agrupado[g]!.add(ex);
+      } else {
+        agrupado[g] = [ex];
+      }
+    }
+    return agrupado;
+  }
+
+  /// Lista treinos de um aluno
+  static Future<List<dynamic>> listarTreinosPorAluno(String cpf) async {
+    final data = await get('/treinos/aluno/$cpf');
+    return (data as List<dynamic>);
+  }
+
+  /// Detalhes de um treino
+  static Future<Map<String, dynamic>> getTreinoDetalhado(int id) async {
+    final data = await get('/treinos/$id/detalhado');
+    return Map<String, dynamic>.from(data);
+  }
+
+  /// Finalizar treino
   static Future<void> finalizarTreino({
     required int treinoId,
     required String alunoCpf,
@@ -231,44 +175,10 @@ class ApiService {
     }
   }
 
-  /// ✍️ Atualizar treino detalhado (com CPF do professor no header)
-  static Future<void> atualizarTreinoDetalhado(int id, Map<String, dynamic> treinoJson) async {
-    final token = await _storage.read(key: 'token');
-    final cpf = await getCpfLogado();
-    final url = Uri.parse('$baseUrl/treinos/$id');
 
-    final response = await http.put(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-        'cpfProfessor': cpf, // <- CPF logado enviado no header
-      },
-      body: jsonEncode(treinoJson),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Erro ao atualizar treino: ${response.body}');
-    }
-  }
-
-  /// 👨‍🏫 Lista de professores
+  /// Lista de professores
   static Future<List<dynamic>> getProfessores() async {
-    final url = Uri.parse('$baseUrl/professores');
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      print('Erro ${response.statusCode}: ${response.body}');
-      throw Exception('Erro ao buscar professores');
-    }
+    final data = await get('/professores');
+    return (data as List<dynamic>);
   }
 }
