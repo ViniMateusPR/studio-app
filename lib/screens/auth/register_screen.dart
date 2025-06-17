@@ -1,3 +1,4 @@
+// lib/screens/auth/register_screen.dart
 import 'package:flutter/material.dart';
 import 'package:studio_app/screens/home/home_empresa_screen.dart';
 import '../../services/auth_service.dart';
@@ -5,48 +6,46 @@ import '../../services/api_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
-
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _nomeController = TextEditingController();
-  final _cnpjController = TextEditingController();
-  final _senhaController = TextEditingController();
-
-  final AuthService _authService = AuthService();
-
-  bool _isLoading = false;
+  final _formKey = GlobalKey<FormState>();
+  final _nomeCtrl = TextEditingController();
+  final _cnpjCtrl = TextEditingController();
+  final _senhaCtrl = TextEditingController();
+  bool _loading = false;
+  bool _showPassword = false;
   String? _error;
 
   Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() {
-      _isLoading = true;
+      _loading = true;
       _error = null;
     });
-
-    final success = await _authService.register(
-      nome: _nomeController.text.trim(),
-      cnpj: _cnpjController.text.trim(),
-      senha: _senhaController.text.trim(),
+    final ok = await AuthService().register(
+      nome: _nomeCtrl.text.trim(),
+      cnpj: _cnpjCtrl.text.trim(),
+      senha: _senhaCtrl.text.trim(),
     );
+    setState(() => _loading = false);
 
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (success) {
-      await ApiService.init(); // carrega token e empresaId
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeEmpresaScreen()),
-      );
-    } else {
-      setState(() {
-        _error = "Erro ao registrar empresa. Tente outro CNPJ.";
-      });
+    if (!ok) {
+      setState(() => _error = 'Não foi possível registrar. Tente outro CNPJ.');
+      return;
     }
+    await ApiService.init();
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeEmpresaScreen()));
+  }
+
+  @override
+  void dispose() {
+    _nomeCtrl.dispose();
+    _cnpjCtrl.dispose();
+    _senhaCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -54,116 +53,120 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        automaticallyImplyLeading: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
         backgroundColor: const Color(0xFF121212),
-        foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 80),
-            Text(
-              'Cadastro da Empresa',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.white.withOpacity(0.9),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-            TextField(
-              controller: _nomeController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Nome da empresa',
-                hintStyle: const TextStyle(color: Colors.white70),
-                filled: true,
-                fillColor: const Color(0xFF1E1E1E),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                prefixIcon: const Icon(Icons.business, color: Colors.white70),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _cnpjController,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'CNPJ',
-                hintStyle: const TextStyle(color: Colors.white70),
-                filled: true,
-                fillColor: const Color(0xFF1E1E1E),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                prefixIcon: const Icon(Icons.credit_card, color: Colors.white70),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _senhaController,
-              obscureText: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Senha',
-                hintStyle: const TextStyle(color: Colors.white70),
-                filled: true,
-                fillColor: const Color(0xFF1E1E1E),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                prefixIcon: const Icon(Icons.lock, color: Colors.white70),
-              ),
-            ),
-            const SizedBox(height: 24),
-            _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.orange))
-                : ElevatedButton(
-              onPressed: _register,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B00),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: const Text(
-                "Registrar",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 40),
-            Center(
-              child: Image.asset(
-                'assets/images/logo.png',
-                height: 150,
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 20),
-              Text(
-                _error!,
-                style: const TextStyle(color: Colors.redAccent),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ],
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                const SizedBox(height: 40),
+                Text(
+                  'Cadastro da Empresa',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                _buildField(_nomeCtrl, 'Nome da empresa', Icons.business, false,
+                    validator: (v) => (v == null || v.isEmpty) ? 'Informe o nome' : null),
+                const SizedBox(height: 16),
+                _buildField(_cnpjCtrl, 'CNPJ', Icons.credit_card, false,
+                    keyboard: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Informe o CNPJ';
+                      if (v.length < 14) return 'CNPJ incompleto';
+                      return null;
+                    }),
+                const SizedBox(height: 16),
+                _buildField(_senhaCtrl, 'Senha', Icons.lock, !_showPassword,
+                    suffix: IconButton(
+                      icon: Icon(
+                        _showPassword ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.white70,
+                      ),
+                      onPressed: () => setState(() => _showPassword = !_showPassword),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Informe a senha';
+                      if (v.length < 6) return 'Senha muito curta';
+                      return null;
+                    }),
+                const SizedBox(height: 24),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+                  ),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6B00),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: _loading
+                        ? const SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : const Text(
+                      'Registrar',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                Image.asset('assets/images/logo.png', height: 120),
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildField(
+      TextEditingController ctrl,
+      String hint,
+      IconData icon,
+      bool obscure, {
+        Widget? suffix,
+        TextInputType keyboard = TextInputType.text,
+        String? Function(String?)? validator,
+      }) {
+    return TextFormField(
+      controller: ctrl,
+      obscureText: obscure,
+      keyboardType: keyboard,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.white70),
+        filled: true,
+        fillColor: const Color(0xFF1E1E1E),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        prefixIcon: Icon(icon, color: Colors.white70),
+        suffixIcon: suffix,
+      ),
+      validator: validator,
     );
   }
 }

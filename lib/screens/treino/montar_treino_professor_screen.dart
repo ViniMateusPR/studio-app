@@ -1,6 +1,8 @@
-// montar_treino_professor_screen.dart
+// lib/screens/treino/montar_treino_professor_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:intl/intl.dart';
 import '../../models/aluno.dart';
 import '../../services/api_service.dart';
 import '../../services/treino_destaque_service.dart';
@@ -22,18 +24,20 @@ class _MontarTreinoProfessorScreenState
   late TabController _tabController;
 
   bool _loading = true;
-  bool _criandoNovo = true;
   Map<String, List<dynamic>> _exerciciosPorGrupo = {};
   List<Map<String, dynamic>> _exerciciosSelecionados = [];
   List<dynamic> _treinosAnteriores = [];
   Map<String, dynamic>? _ultimoTreino;
-  final _nomeTreinoController = TextEditingController();
+  final TextEditingController _nomeTreinoController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _carregarDados();
+    _tabController.addListener(() {
+      setState(() {}); // para mostrar/esconder FAB
+    });
   }
 
   @override
@@ -60,7 +64,6 @@ class _MontarTreinoProfessorScreenState
         _exerciciosPorGrupo = exercicios;
         _treinosAnteriores = treinos ?? [];
         _ultimoTreino = ultimo;
-        _criandoNovo = _treinosAnteriores.isEmpty;
       });
     } catch (e) {
       debugPrint('Erro ao carregar dados: $e');
@@ -87,19 +90,14 @@ class _MontarTreinoProfessorScreenState
         'exercicios': _exerciciosSelecionados,
       };
       await ApiService.salvarTreinoDetalhado(body);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Treino salvo com sucesso!')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Treino salvo com sucesso!')));
       await _carregarDados();
-      setState(() {
-        _criandoNovo = false;
-        _tabController.index = 0;
-      });
+      _tabController.index = 0;
     } catch (e) {
       debugPrint('Erro ao salvar treino: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao salvar treino: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erro ao salvar treino: $e')));
     }
   }
 
@@ -112,6 +110,40 @@ class _MontarTreinoProfessorScreenState
       .map((w) =>
   w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
       .join(' ');
+
+  Future<bool> _confirmExcluir() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text('Excluir treino?', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Deseja realmente excluir este treino?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Não', style: TextStyle(color: Colors.orange)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sim', style: TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  String _formatDate(String iso) {
+    try {
+      final dt = DateTime.parse(iso);
+      return DateFormat('dd/MM/yyyy').format(dt);
+    } catch (_) {
+      return iso;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,12 +178,10 @@ class _MontarTreinoProfessorScreenState
       ),
       floatingActionButton: _tabController.index == 1
           ? FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFFF6B00),
+        backgroundColor: _canSave ? const Color(0xFFFF6B00) : Colors.grey,
         icon: const Icon(Icons.save, color: Colors.white),
-        label: Text(
-          'Salvar (${_exerciciosSelecionados.length})',
-          style: const TextStyle(color: Colors.white),
-        ),
+        label: Text('Salvar (${_exerciciosSelecionados.length})',
+            style: const TextStyle(color: Colors.white)),
         onPressed: _canSave ? _salvarTreino : null,
       )
           : null,
@@ -162,28 +192,47 @@ class _MontarTreinoProfessorScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Último treino (sem botão “+”)
         const Padding(
           padding: EdgeInsets.all(16),
-          child: Text('Último Treino',
-              style: TextStyle(color: Colors.orange, fontSize: 18)),
+          child:
+          Text('Último Treino', style: TextStyle(color: Colors.orange, fontSize: 18)),
         ),
         if (_ultimoTreino != null)
           PreviousWorkoutCard(
             data: _ultimoTreino!,
-            aluno: widget.aluno,
+            aluno: null, // aluno nulo = sem “+”
           ),
         const Divider(color: Colors.orange, height: 32),
+
+        // Treinos anteriores (com botão “+”)
         const Padding(
           padding: EdgeInsets.all(16),
-          child: Text('Treinos Anteriores',
+          child: Text('Lista de Treinos',
               style: TextStyle(color: Colors.orange, fontSize: 18)),
         ),
         Expanded(
           child: ListView.builder(
             itemCount: _treinosAnteriores.length,
             itemBuilder: (_, i) {
-              final t = _treinosAnteriores[i];
-              return PreviousWorkoutCard(data: t, aluno: widget.aluno);
+              final treino = _treinosAnteriores[i] as Map<String, dynamic>;
+              return Dismissible(
+                key: ValueKey(treino['id'] ?? treino['treino_id']),
+                background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: const Icon(Icons.delete, color: Colors.white)),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (_) => _confirmExcluir(),
+                onDismissed: (_) async {
+                  final rawId = treino['treino_id'] ?? treino['id'];
+                  final id = rawId is int ? rawId : int.tryParse(rawId.toString());
+                  if (id != null) await ApiService.excluirTreino(id);
+                  setState(() => _treinosAnteriores.removeAt(i));
+                },
+                child: PreviousWorkoutCard(
+                  data: treino,
+                  aluno: widget.aluno, // aluno != null = aparece “+”
+                ),
+              );
             },
           ),
         ),
@@ -218,20 +267,21 @@ class _MontarTreinoProfessorScreenState
             onSelect: (info) {
               final ex = info['exercicio'] as Map<String, dynamic>;
               final sel = info['selected'] as bool;
-              if (sel) {
-                _exerciciosSelecionados.add({
-                  'exercicioId': ex['id'],
-                  'ordem': 1,
-                  'series': 3,
-                  'repeticoes': 10,
-                  'carga': 0,
-                  'observacao': ''
-                });
-              } else {
-                _exerciciosSelecionados
-                    .removeWhere((x) => x['exercicioId'] == ex['id']);
-              }
-              setState(() {});
+              setState(() {
+                if (sel) {
+                  _exerciciosSelecionados.add({
+                    'exercicioId': ex['id'],
+                    'ordem': 1,
+                    'series': 3,
+                    'repeticoes': 10,
+                    'carga': 0,
+                    'observacao': ''
+                  });
+                } else {
+                  _exerciciosSelecionados
+                      .removeWhere((x) => x['exercicioId'] == ex['id']);
+                }
+              });
             },
           );
         }).toList(),
@@ -245,12 +295,23 @@ class _MontarTreinoProfessorScreenState
 class PreviousWorkoutCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final Aluno? aluno;
-  const PreviousWorkoutCard({super.key, required this.data, this.aluno});
+
+  const PreviousWorkoutCard({
+    super.key,
+    required this.data,
+    this.aluno,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final date = DateTime.parse(data['data']);
-    final expired = DateTime.now().difference(date).inDays > 40;
+    final raw = data['data'] ?? '';
+    DateTime? dt;
+    try {
+      dt = DateTime.parse(raw);
+    } catch (_) {}
+    final formatted = dt != null ? DateFormat('dd/MM/yyyy').format(dt) : raw;
+    final expired = dt != null && DateTime.now().difference(dt).inDays > 40;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -259,52 +320,37 @@ class PreviousWorkoutCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
-        title: Text(data['descricao'] ?? '',
-            style: TextStyle(
-                color: expired ? Colors.red : Colors.white,
-                fontWeight: FontWeight.bold)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Data: ${data['data'] ?? ''}',
-                style: const TextStyle(color: Colors.white70)),
-            if (expired)
-              const Text('⚠ Treino vencido!',
-                  style: TextStyle(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.bold)),
-          ],
+        title: Text(
+          data['descricao'] ?? '',
+          style: TextStyle(
+              color: expired ? Colors.red : Colors.white,
+              fontWeight: FontWeight.bold),
         ),
+        subtitle: Text('Data: $formatted',
+            style: const TextStyle(color: Colors.white70)),
         trailing: aluno == null
             ? null
             : IconButton(
           icon: const Icon(Icons.add, color: Colors.orange),
           onPressed: () async {
-            try {
-              final detalhes = await ApiService.getTreinoDetalhado(
-                  data['treino_id'] ?? data['id']);
-              await TreinoDestaqueService.adicionarTreinoCompleto({
-                'aluno': {
-                  'cpf': aluno!.cpf,
-                  'nome': aluno!.nome,
-                },
-                'treino': detalhes,
-              });
-              // Navega direto para a HomeProfessorScreen, limpando a pilha
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const HomeProfessorScreen()),
-                    (route) => false,
-              );
-            } catch (_) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Erro ao buscar detalhes do treino.')),
-              );
-            }
+            final detalhes = await ApiService.getTreinoDetalhado(
+                data['treino_id'] ?? data['id']);
+            await TreinoDestaqueService.adicionarTreinoCompleto({
+              'aluno': {
+                'cpf': aluno!.cpf,
+                'nome': aluno!.nome,
+              },
+              'treino': detalhes,
+            });
+            // volta à HomeProfessorScreen
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const HomeProfessorScreen()),
+                  (r) => false,
+            );
           },
         ),
-
       ),
     );
   }
@@ -415,7 +461,8 @@ class ExerciseFields extends StatelessWidget {
       const SizedBox(height: 8),
       NumberField(label: 'Séries', model: model, keyName: 'series'),
       const SizedBox(height: 8),
-      NumberField(label: 'Repetições', model: model, keyName: 'repeticoes'),
+      NumberField(
+          label: 'Repetições', model: model, keyName: 'repeticoes'),
       const SizedBox(height: 8),
       NumberField(label: 'Carga (kg)', model: model, keyName: 'carga'),
       const SizedBox(height: 8),

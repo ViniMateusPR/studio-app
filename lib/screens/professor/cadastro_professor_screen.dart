@@ -1,26 +1,29 @@
+// lib/screens/professor/cadastro_professor_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 
 class CadastroProfessorScreen extends StatefulWidget {
   const CadastroProfessorScreen({super.key});
 
   @override
-  State<CadastroProfessorScreen> createState() => _CadastroProfessorScreenState();
+  State<CadastroProfessorScreen> createState() =>
+      _CadastroProfessorScreenState();
 }
 
 class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
-  final TextEditingController _nomeController = TextEditingController();
-  final TextEditingController _cpfController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _senhaController = TextEditingController();
-
-  final String baseUrl = 'https://f8c0-168-197-141-209.ngrok-free.app';
+  final _nomeController = TextEditingController();
+  final _cpfController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _senhaController = TextEditingController();
 
   bool _isLoading = false;
   String? _mensagem;
   bool _erro = false;
+  bool _showSenha = false; // controla visibilidade da senha
 
   Future<void> _cadastrarProfessor() async {
     final nome = _nomeController.text.trim();
@@ -44,8 +47,8 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
     try {
       final empresaId = await AuthService().getEmpresaId();
       final token = await AuthService().getToken();
-
-      final url = Uri.parse('$baseUrl/professores/cadastrarProfessor');
+      final url = Uri.parse(
+          '${ApiService.baseUrl}/professores/cadastrarProfessor');
 
       final response = await http.post(
         url,
@@ -75,18 +78,14 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
           _erro = true;
           _mensagem = 'Erro ao cadastrar professor.';
         });
-        print('Erro ao cadastrar: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       setState(() {
         _erro = true;
         _mensagem = 'Erro de conexão ou formato inválido';
       });
-      print('Exceção: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
@@ -114,47 +113,69 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildTextField(_nomeController, 'Nome'),
-            _buildTextField(_cpfController, 'CPF', keyboardType: TextInputType.number),
-            _buildTextField(_emailController, 'Email', keyboardType: TextInputType.emailAddress),
-            _buildTextField(_senhaController, 'Senha', obscure: true),
+            _buildTextField(_cpfController, 'CPF',
+                keyboardType: TextInputType.number),
+            _buildTextField(_emailController, 'Email',
+                keyboardType: TextInputType.emailAddress),
+            _buildTextField(
+              _senhaController,
+              'Senha',
+              obscure: !_showSenha,
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _showSenha ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.white70,
+                ),
+                onPressed: () =>
+                    setState(() => _showSenha = !_showSenha),
+              ),
+            ),
             const SizedBox(height: 24),
             _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                child:
+                CircularProgressIndicator(color: Colors.orange))
                 : ElevatedButton(
               onPressed: _cadastrarProfessor,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFF6B00),
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(50),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
               child: const Text(
                 "Cadastrar",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
-            if (_mensagem != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: Text(
-                  _mensagem!,
-                  style: TextStyle(
-                    color: _erro ? Colors.redAccent : Colors.greenAccent,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
+            if (_mensagem != null) ...[
+              const SizedBox(height: 20),
+              Text(
+                _mensagem!,
+                style: TextStyle(
+                  color: _erro ? Colors.redAccent : Colors.greenAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
                 ),
+                textAlign: TextAlign.center,
               ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label,
-      {bool obscure = false, TextInputType? keyboardType}) {
+  Widget _buildTextField(
+      TextEditingController controller,
+      String label, {
+        bool obscure = false,
+        TextInputType? keyboardType,
+        Widget? suffixIcon,
+      }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: TextField(
@@ -171,6 +192,7 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
+          suffixIcon: suffixIcon,
         ),
       ),
     );

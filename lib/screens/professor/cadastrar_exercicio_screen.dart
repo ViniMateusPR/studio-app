@@ -1,18 +1,20 @@
-import 'package:flutter/material.dart';
-import 'package:studio_app/services/api_service.dart';
+// lib/screens/professor/cadastrar_exercicio_screen.dart
 
+import 'package:flutter/material.dart';
+import '../../services/api_service.dart';
 import '../home/home_professor_screen.dart';
 
 class CadastrarExercicioScreen extends StatefulWidget {
   const CadastrarExercicioScreen({super.key});
 
   @override
-  State<CadastrarExercicioScreen> createState() => _CadastrarExercicioScreenState();
+  State<CadastrarExercicioScreen> createState() =>
+      _CadastrarExercicioScreenState();
 }
 
 class _CadastrarExercicioScreenState extends State<CadastrarExercicioScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nomeController = TextEditingController();
+  final _nomeController = TextEditingController();
   String? _grupoSelecionado;
   List<String> _gruposMusculares = [];
   bool _loading = true;
@@ -35,32 +37,32 @@ class _CadastrarExercicioScreenState extends State<CadastrarExercicioScreen> {
         _gruposMusculares = grupos;
         _loading = false;
       });
-    } catch (e) {
-      print('Erro ao buscar grupos musculares: $e');
+    } catch (_) {
       setState(() => _loading = false);
     }
   }
 
   Future<void> _salvarExercicio() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        await ApiService.post(
-          '/exercicios/cadastrar',
-          body: {
-            "nome": _nomeController.text,
-            "grupoMuscular": _grupoSelecionado,
-          },
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Exercício cadastrado com sucesso!')),
-        );
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> HomeProfessorScreen()));
-      } catch (e) {
-        print("Erro ao salvar exercício: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao salvar exercício: $e')),
-        );
-      }
+    if (!_formKey.currentState!.validate()) return;
+    try {
+      await ApiService.post(
+        '/exercicios/cadastrar',
+        body: {
+          'nome': _nomeController.text.trim(),
+          'grupoMuscular': _grupoSelecionado,
+        },
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Exercício cadastrado com sucesso!')),
+      );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeProfessorScreen()),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao salvar exercício: $e')),
+      );
     }
   }
 
@@ -79,68 +81,91 @@ class _CadastrarExercicioScreenState extends State<CadastrarExercicioScreen> {
         title: const Text('Cadastrar Exercício'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_)=> HomeProfessorScreen())),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const HomeProfessorScreen()),
+            );
+          },
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+          ? const Center(
+        child: CircularProgressIndicator(color: Colors.orange),
+      )
           : Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Form(
           key: _formKey,
           child: ListView(
             children: [
+              // — Nome do exercício —
               TextFormField(
                 controller: _nomeController,
                 style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Nome do Exercício',
-                  labelStyle: TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Nome do Exercício',
+                  hintStyle: const TextStyle(color: Colors.white70),
                   filled: true,
-                  fillColor: Colors.black12,
-                  border: OutlineInputBorder(),
+                  fillColor: const Color(0xFF1E1E1E),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
-                validator: (value) => value!.isEmpty ? "Campo obrigatório" : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'Campo obrigatório'
+                    : null,
               ),
               const SizedBox(height: 16),
+              // — Grupo muscular —
               Theme(
                 data: Theme.of(context).copyWith(
-                  canvasColor: Colors.grey[900],
-                  inputDecorationTheme: const InputDecorationTheme(
-                    border: OutlineInputBorder(),
-                  ),
+                  canvasColor: const Color(0xFF1E1E1E),
                 ),
                 child: DropdownButtonFormField<String>(
                   value: _grupoSelecionado,
-                  isExpanded: true,
-                  iconEnabledColor: Colors.white,
-                  dropdownColor: Colors.grey[900],
-                  decoration: const InputDecoration(
-                    labelText: 'Grupo Muscular',
-                    labelStyle: TextStyle(color: Colors.white),
+                  style: const TextStyle(color: Colors.white),
+                  iconEnabledColor: Colors.orange,
+                  decoration: InputDecoration(
+                    hintText: 'Grupo Muscular',
+                    hintStyle: const TextStyle(color: Colors.white70),
                     filled: true,
-                    fillColor: Colors.black12,
-                    border: OutlineInputBorder(),
+                    fillColor: const Color(0xFF1E1E1E),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                   items: _gruposMusculares
                       .map((g) => DropdownMenuItem(
                     value: g,
-                    child: Text(g, style: const TextStyle(color: Colors.white)),
+                    child: Text(g,
+                        style: const TextStyle(color: Colors.white)),
                   ))
                       .toList(),
-                  onChanged: (value) => setState(() => _grupoSelecionado = value),
-                  validator: (value) => value == null ? "Selecione um grupo" : null,
+                  onChanged: (v) => setState(() => _grupoSelecionado = v),
+                  validator: (v) =>
+                  v == null ? 'Selecione um grupo' : null,
                 ),
               ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
+              const SizedBox(height: 32),
+              // — Botão Salvar —
+              ElevatedButton(
                 onPressed: _salvarExercicio,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B00),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
-                icon: const Icon(Icons.save, color: Colors.white,),
-                label: const Text("Salvar Exercício", style: TextStyle(color: Colors.white),),
+                child: const Text(
+                  'Salvar Exercício',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
