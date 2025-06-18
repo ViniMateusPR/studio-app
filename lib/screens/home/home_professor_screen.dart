@@ -50,28 +50,34 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
 
   Future<void> _loadAll() async {
     setState(() => _loading = true);
+
     final jsonString = await _storage.read(key: 'checkbox_status');
     if (jsonString != null) {
       _checkboxStatus = Map<String, bool>.from(jsonDecode(jsonString));
     }
 
     final salvos = await TreinoDestaqueService.getTreinosSalvos();
-    final grouped = <String, Map<String, dynamic>>{};
+    final List<Map<String, dynamic>> alunosList = [];
+
     for (var item in salvos) {
       final aluno = item['aluno'] as Map<String, dynamic>;
-      grouped.putIfAbsent(aluno['cpf'], () => {
-        'cpf': aluno['cpf'],
+      final id = aluno['id'].toString();
+      final treinos = (item['treinos'] ?? []) as List;
+
+      alunosList.add({
+        'id': id,
         'nome': aluno['nome'],
-        'treinos': <dynamic>[],
+        'treinos': treinos,
       });
-      grouped[aluno['cpf']]!['treinos'].add(item['treino']);
     }
+
     setState(() {
-      _alunosComTreinos = grouped.values.toList();
+      _alunosComTreinos = alunosList;
       _selectedIndex = 0;
       _loading = false;
     });
   }
+
 
   String _formatDate(String iso) {
     try {
@@ -91,7 +97,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
   }
 
   Future<bool> _handleDismiss(
-      BuildContext ctx, String cpf, bool isFinish) async {
+      BuildContext ctx, String alunoId, bool isFinish) async {
     final action = isFinish ? 'finalizar' : 'cancelar';
     final confirmed = await showDialog<bool>(
       context: ctx,
@@ -120,7 +126,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     if (confirmed != true) return false;
 
     if (isFinish) {
-      final alunoItem = _alunosComTreinos.firstWhere((a) => a['cpf'] == cpf);
+      final alunoItem = _alunosComTreinos.firstWhere((a) => a['id'] == alunoId);
       final treino = alunoItem['treinos'].last as Map<String, dynamic>;
       final raw = treino['treinoId'] ?? treino['id'] ?? treino['treino_id'];
       final int? id = raw is int ? raw : int.tryParse(raw.toString());
@@ -128,15 +134,15 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
         final hoje = DateTime.now().toIso8601String().substring(0, 10);
         await ApiService.finalizarTreino(
           treinoId: id,
-          alunoCpf: cpf,
+          alunoId: int.parse(alunoId),
           dataRealizacao: hoje,
         );
       }
     }
 
-    await TreinoDestaqueService.removerTreinoPorCpf(cpf);
+    await TreinoDestaqueService.removerTreinoPorId(alunoId);
     setState(() {
-      _alunosComTreinos.removeWhere((a) => a['cpf'] == cpf);
+      _alunosComTreinos.removeWhere((a) => a['id'] == alunoId);
       _selectedIndex = _alunosComTreinos.isEmpty
           ? 0
           : _selectedIndex.clamp(0, _alunosComTreinos.length - 1);
@@ -166,12 +172,10 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFFF6B00),
+      appBar: AppBar(backgroundColor: const Color(0xFF121212),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-
       drawer: _buildDrawer(),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Colors.orange))
@@ -186,8 +190,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
         child: Text(
           'Bem-vindo, $nomeProfessor 👋',
           textAlign: TextAlign.center,
-          style: const TextStyle(
-              color: Colors.white70, fontSize: 18),
+          style: const TextStyle(color: Colors.white70, fontSize: 18),
         ),
       ),
       bottomNavigationBar:
@@ -196,11 +199,11 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
   }
 
   Widget _buildDrawer() => Drawer(
-    backgroundColor: const Color(0xFF1E1E1E),
+    backgroundColor: const Color(0xFF121212),
     child: ListView(
       children: [
         const DrawerHeader(
-          decoration: BoxDecoration(color: Color(0xFFFF6B00)),
+          decoration: BoxDecoration(color: Color(0xFF121212)),
           child: Text('Menu do Professor',
               style: TextStyle(color: Colors.white, fontSize: 20)),
         ),
@@ -233,24 +236,23 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     ),
   );
 
-  Widget _buildBottomNav() => LayoutBuilder(builder: (context, bc) {
-    final totalWidth = _alunosComTreinos.length * _itemWidth +
-        (_alunosComTreinos.length - 1) * _spacing;
-    final align = totalWidth < bc.maxWidth
-        ? WrapAlignment.center
-        : WrapAlignment.start;
+  Widget _buildBottomNav() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const int maxVisibleItems = 5;
+        final bool isScrollable = _alunosComTreinos.length > maxVisibleItems;
+        final double totalWidth = constraints.maxWidth;
+        final double itemWidth = isScrollable
+            ? _itemWidth
+            : (totalWidth / _alunosComTreinos.length).clamp(80, _itemWidth);
 
-    return Container(
-      color: const Color(0xFF1E1E1E),
-      height: 60,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: bc.maxWidth),
-          child: Wrap(
-            alignment: align,
-            spacing: _spacing,
-            children: List.generate(_alunosComTreinos.length, (i) {
+        return Container(
+          color: const Color(0xFF1E1E1E),
+          height: 60,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _alunosComTreinos.length,
+            itemBuilder: (_, i) {
               final aluno = _alunosComTreinos[i];
               final isSel = i == _selectedIndex;
               return GestureDetector(
@@ -259,42 +261,38 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
                   _pageController.jumpToPage(i);
                 },
                 child: SizedBox(
-                  width: _itemWidth,
+                  width: itemWidth,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
                         height: 3,
                         width: 60,
-                        color:
-                        isSel ? Colors.orange : Colors.transparent,
+                        color: isSel ? Colors.orange : Colors.transparent,
                       ),
                       const SizedBox(height: 6),
                       Text(
                         aluno['nome'].toString().split(' ').first,
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: isSel
-                              ? Colors.white
-                              : Colors.white54,
-                          fontWeight: isSel
-                              ? FontWeight.bold
-                              : FontWeight.normal,
+                          color: isSel ? Colors.white : Colors.white54,
+                          fontWeight:
+                          isSel ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     ],
                   ),
                 ),
               );
-            }),
+            },
           ),
-        ),
-      ),
+        );
+      },
     );
-  });
+  }
 
   Widget _buildTreinosAluno(Map<String, dynamic> alunoData) {
-    final cpf = alunoData['cpf'] as String;
+    final id = alunoData['id'] as String;
     final treinos = alunoData['treinos'] as List<dynamic>;
 
     return ListView.builder(
@@ -304,19 +302,14 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
         final treino = treinos[idx] as Map<String, dynamic>;
         final exs = treino['exercicios'] as List<dynamic>;
         final total = exs.length;
-        final done = exs
-            .asMap()
-            .entries
-            .where((e) {
-          final key =
-              '$cpf-${treino['id'] ?? treino['treinoId']}-${e.key}';
+        final done = exs.asMap().entries.where((e) {
+          final key = '$id-${treino['id'] ?? treino['treinoId']}-${e.key}';
           return _checkboxStatus[key] == true;
-        })
-            .length;
+        }).length;
         final prog = total > 0 ? done / total : 0.0;
 
         return Dismissible(
-          key: ValueKey('$cpf-${treino['id'] ?? treino['treinoId']}-$idx'),
+          key: ValueKey('$id-${treino['id'] ?? treino['treinoId']}-$idx'),
           background: Container(
             alignment: Alignment.centerLeft,
             color: Colors.green,
@@ -331,9 +324,8 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
           ),
           confirmDismiss: (direction) {
             final isFinish = direction == DismissDirection.startToEnd;
-            return _handleDismiss(context, cpf, isFinish);
+            return _handleDismiss(context, id, isFinish);
           },
-          onDismissed: (_) {},
           child: Card(
             color: const Color(0xFF1E1E1E),
             margin: const EdgeInsets.symmetric(vertical: 8),
@@ -357,13 +349,14 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.white70),
                         onPressed: () async {
-                          final id = treino['id'] ?? treino['treinoId'];
+                          final idTreino =
+                              treino['id'] ?? treino['treinoId'];
                           final ok = await Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
                               builder: (_) => EditarTreinoScreen(
-                                treinoId: id,
-                                alunoCpf: cpf,
+                                treinoId: idTreino,
+                                alunoId: int.parse(id),
                                 alunoNome: alunoData['nome'],
                               ),
                             ),
@@ -388,11 +381,12 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
                   ...exs.asMap().entries.map((e) {
                     final ex = e.value as Map<String, dynamic>;
                     final key =
-                        '$cpf-${treino['id'] ?? treino['treinoId']}-${e.key}';
+                        '$id-${treino['id'] ?? treino['treinoId']}-${e.key}';
                     final ck = _checkboxStatus[key] ?? false;
                     return CheckboxListTile(
                       value: ck,
-                      onChanged: (v) => _toggleCheckbox(key, v ?? false),
+                      onChanged: (v) =>
+                          _toggleCheckbox(key, v ?? false),
                       activeColor: Colors.orange,
                       checkColor: Colors.black,
                       title: Text(

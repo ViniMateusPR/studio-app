@@ -48,7 +48,7 @@ class _MontarTreinoProfessorScreenState
     setState(() => _loading = true);
     try {
       final exercicios = await ApiService.getExerciciosAgrupados();
-      final treinos = await ApiService.listarTreinosPorAluno(widget.aluno.cpf);
+      final treinos = await ApiService.listarTreinosPorAluno(widget.aluno.id);
       Map<String, dynamic>? ultimo;
       if (widget.aluno.ultimoTreinoId != null) {
         try {
@@ -72,22 +72,22 @@ class _MontarTreinoProfessorScreenState
   Future<void> _salvarTreino() async {
     final nomeTreino = _nomeTreinoController.text.trim();
     if (nomeTreino.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Digite o nome do treino.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Digite o nome do treino.')));
       return;
     }
     try {
       final cpfProf = await _storage.read(key: 'cpf');
       final body = {
         'descricao': nomeTreino,
-        'alunoCpf': widget.aluno.cpf,
+        'alunoId': widget.aluno.id,
         'personalCpf': cpfProf,
         'data': DateTime.now().toIso8601String(),
         'exercicios': _exerciciosSelecionados,
       };
       await ApiService.salvarTreinoDetalhado(body);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Treino salvo com sucesso!')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Treino salvo com sucesso!')));
       await _carregarDados();
       _tabController.index = 0;
     } catch (e) {
@@ -106,7 +106,8 @@ class _MontarTreinoProfessorScreenState
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Excluir treino?', style: TextStyle(color: Colors.white)),
+        title: const Text('Excluir treino?',
+            style: TextStyle(color: Colors.white)),
         content: const Text(
           'Deseja realmente excluir este treino?',
           style: TextStyle(color: Colors.white70),
@@ -126,21 +127,12 @@ class _MontarTreinoProfessorScreenState
     return ok == true;
   }
 
-  String _formatDate(String iso) {
-    try {
-      final dt = DateTime.parse(iso);
-      return DateFormat('dd/MM/yyyy').format(dt);
-    } catch (_) {
-      return iso;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFF6B00),
+        backgroundColor: const Color(0xFF121212),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context, false),
@@ -155,14 +147,16 @@ class _MontarTreinoProfessorScreenState
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+          ? const Center(
+          child: CircularProgressIndicator(color: Colors.orange))
           : TabBarView(
         controller: _tabController,
         children: [_buildHistorico(), _buildNovoTreino()],
       ),
       floatingActionButton: _tabController.index == 1
           ? FloatingActionButton.extended(
-        backgroundColor: _canSave ? const Color(0xFFFF6B00) : Colors.grey,
+        backgroundColor:
+        _canSave ? const Color(0xFFFF6B00) : Colors.grey,
         icon: const Icon(Icons.save, color: Colors.white),
         label: Text(
           'Salvar (${_exerciciosSelecionados.length})',
@@ -183,11 +177,11 @@ class _MontarTreinoProfessorScreenState
           child: Text('Último Treino',
               style: TextStyle(color: Colors.orange, fontSize: 18)),
         ),
-        if (_ultimoTreino != null)
+        if (_treinosAnteriores.isNotEmpty)
           PreviousWorkoutCard(
-            data: _ultimoTreino!,
-            aluno: null,
+            data: _treinosAnteriores.first,
             mostrarAlteradoPor: false,
+            usarDataDeRealizacao: true,
           ),
         const Divider(color: Colors.orange, height: 32),
         const Padding(
@@ -199,36 +193,39 @@ class _MontarTreinoProfessorScreenState
           child: ListView.builder(
             itemCount: _treinosAnteriores.length,
             itemBuilder: (_, i) {
-              final treino = _treinosAnteriores[i] as Map<String, dynamic>;
+              final t = _treinosAnteriores[i] as Map<String, dynamic>;
               return Dismissible(
-                key: ValueKey(treino['id'] ?? treino['treino_id']),
-                background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: const Icon(Icons.delete, color: Colors.white)),
+                key: ValueKey(t['id']),
+                background: Container(
+                  color: Colors.red,
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: const Icon(Icons.delete, color: Colors.white),
+                ),
                 direction: DismissDirection.endToStart,
                 confirmDismiss: (_) => _confirmExcluir(),
                 onDismissed: (_) async {
-                  final rawId = treino['treino_id'] ?? treino['id'];
-                  final id = rawId is int ? rawId : int.tryParse(rawId.toString());
+                  final id = t['id'];
                   if (id != null) await ApiService.excluirTreino(id);
                   setState(() => _treinosAnteriores.removeAt(i));
                 },
                 child: PreviousWorkoutCard(
-                  data: treino,
-                  aluno: widget.aluno,
+                  data: t,
                   mostrarAlteradoPor: true,
+                  usarDataDeRealizacao: false,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.white70),
                         onPressed: () async {
-                          final id = treino['id'] ?? treino['treino_id'];
+                          final id = t['id'] as int?;
                           final ok = await Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
                               builder: (_) => EditarTreinoScreen(
-                                treinoId: id,
-                                alunoCpf: widget.aluno.cpf,
+                                treinoId: id!,
+                                alunoId: widget.aluno.id,
                                 alunoNome: widget.aluno.nome,
                               ),
                             ),
@@ -240,17 +237,19 @@ class _MontarTreinoProfessorScreenState
                         icon: const Icon(Icons.add, color: Colors.orange),
                         onPressed: () async {
                           final detalhes = await ApiService.getTreinoDetalhado(
-                              treino['treino_id'] ?? treino['id']);
+                            t['treino_id'] ?? t['id'],
+                          );
                           await TreinoDestaqueService.adicionarTreinoCompleto({
                             'aluno': {
-                              'cpf': widget.aluno.cpf,
+                              'id': widget.aluno.id,
                               'nome': widget.aluno.nome,
                             },
                             'treino': detalhes,
                           });
                           Navigator.pushAndRemoveUntil(
                             context,
-                            MaterialPageRoute(builder: (_) => const HomeProfessorScreen()),
+                            MaterialPageRoute(
+                                builder: (_) => const HomeProfessorScreen()),
                                 (r) => false,
                           );
                         },
@@ -261,7 +260,7 @@ class _MontarTreinoProfessorScreenState
               );
             },
           ),
-        ),
+        )
       ],
     );
   }
@@ -296,20 +295,24 @@ class _MontarTreinoProfessorScreenState
               final sel = info['selected'] as bool;
               setState(() {
                 if (sel) {
-                  _exerciciosSelecionados.add({
-                    'exercicioId': ex['id'],
-                    'ordem': 1,
-                    'series': 3,
-                    'repeticoes': 10,
-                    'carga': 0,
-                    'observacao': ''
-                  });
+                  if (!_exerciciosSelecionados
+                      .any((e) => e['exercicioId'] == ex['id'])) {
+                    _exerciciosSelecionados.add({
+                      'exercicioId': ex['id'],
+                      'ordem': 1,
+                      'series': 3,
+                      'repeticoes': 10,
+                      'carga': 0,
+                      'observacao': ''
+                    });
+                  }
                 } else {
                   _exerciciosSelecionados
                       .removeWhere((x) => x['exercicioId'] == ex['id']);
                 }
               });
             },
+
           );
         }).toList(),
       ],
@@ -317,25 +320,27 @@ class _MontarTreinoProfessorScreenState
   }
 }
 
-// ───── Widgets Auxiliares ─────
 
 class PreviousWorkoutCard extends StatelessWidget {
   final Map<String, dynamic> data;
-  final Aluno? aluno;
-  final Widget? trailing;
   final bool mostrarAlteradoPor;
+  final bool usarDataDeRealizacao;
+  final Widget? trailing;
 
   const PreviousWorkoutCard({
     super.key,
     required this.data,
-    this.aluno,
-    this.trailing,
     this.mostrarAlteradoPor = false,
+    this.usarDataDeRealizacao = false,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
-    final raw = data['data'] ?? '';
+    final raw = usarDataDeRealizacao
+        ? (data['dataRealizacao'] ?? '')
+        : (data['data'] ?? '');
+
     DateTime? dt;
     try {
       dt = DateTime.parse(raw);
@@ -363,7 +368,9 @@ class PreviousWorkoutCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Data: $formatted',
+              usarDataDeRealizacao
+                  ? 'Realizado em: $formatted'
+                  : 'Criado em: $formatted',
               style: const TextStyle(color: Colors.white70),
             ),
             if (mostrarAlteradoPor && data['alteradoPorNome'] != null)
@@ -378,6 +385,7 @@ class PreviousWorkoutCard extends StatelessWidget {
     );
   }
 }
+
 
 class ExerciseGroupTile extends StatelessWidget {
   final String groupName;
@@ -396,10 +404,12 @@ class ExerciseGroupTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      data: Theme.of(context)
+          .copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
         title: Text(groupName,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
         iconColor: Colors.orange,
         collapsedIconColor: Colors.orange,
         children: exercises
@@ -436,14 +446,23 @@ class _ExerciseItemState extends State<ExerciseItem> {
   @override
   void initState() {
     super.initState();
-    _isSelected =
-        widget.selectedList.any((e) => e['exercicioId'] == widget.data['id']);
+    _isSelected = widget.selectedList
+        .any((e) => e['exercicioId'] == widget.data['id']);
   }
 
   @override
   Widget build(BuildContext context) {
-    final idx = widget.selectedList
-        .indexWhere((e) => e['exercicioId'] == widget.data['id']);
+    final current = widget.selectedList.firstWhere(
+            (e) => e['exercicioId'] == widget.data['id'],
+        orElse: () => {
+          'exercicioId': widget.data['id'],
+          'ordem': 1,
+          'series': 3,
+          'repeticoes': 10,
+          'carga': 0,
+          'observacao': ''
+        });
+
     return Column(
       children: [
         CheckboxListTile(
@@ -454,13 +473,16 @@ class _ExerciseItemState extends State<ExerciseItem> {
           checkColor: Colors.black,
           onChanged: (sel) {
             setState(() => _isSelected = sel!);
-            widget.onSelect({'exercicio': widget.data, 'selected': sel, 'index': idx});
+            widget.onSelect({
+              'exercicio': widget.data,
+              'selected': sel,
+            });
           },
         ),
         if (_isSelected)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ExerciseFields(model: widget.selectedList[idx]),
+            child: ExerciseFields(model: current),
           ),
       ],
     );

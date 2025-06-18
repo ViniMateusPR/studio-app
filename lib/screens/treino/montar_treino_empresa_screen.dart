@@ -30,7 +30,7 @@ class _MontarTreinoEmpresaScreenState extends State<MontarTreinoEmpresaScreen> {
   Future<void> _carregarDados() async {
     try {
       final exercicios = await ApiService.getExerciciosAgrupados();
-      final treinos = await ApiService.listarTreinosPorAluno(widget.aluno.cpf);
+      final treinos = await ApiService.listarTreinosPorAluno(widget.aluno.id);
       setState(() {
         _exerciciosPorGrupo = exercicios;
         _treinosAnteriores = treinos ?? [];
@@ -55,7 +55,7 @@ class _MontarTreinoEmpresaScreenState extends State<MontarTreinoEmpresaScreen> {
 
       final treino = {
         'descricao': nomeTreino,
-        'alunoCpf': widget.aluno.cpf,
+        'alunoCpf': widget.aluno.id,
         'data': DateTime.now().toIso8601String(),
         'exercicios': _exerciciosSelecionados
       };

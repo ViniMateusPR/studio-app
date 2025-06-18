@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:studio_app/services/treino_destaque_service.dart';
 
 class ApiService {
   static const String baseUrl = 'https://f8c0-168-197-141-209.ngrok-free.app';
@@ -135,10 +136,11 @@ class ApiService {
   }
 
   /// Lista treinos de um aluno
-  static Future<List<dynamic>> listarTreinosPorAluno(String cpf) async {
-    final data = await get('/treinos/aluno/$cpf');
+  static Future<List<dynamic>> listarTreinosPorAluno(int alunoId) async {
+    final data = await get('/treinos/aluno/$alunoId');
     return (data as List<dynamic>);
   }
+
 
   /// Detalhes de um treino
   static Future<Map<String, dynamic>> getTreinoDetalhado(int id) async {
@@ -149,7 +151,7 @@ class ApiService {
   /// Finalizar treino
   static Future<void> finalizarTreino({
     required int treinoId,
-    required String alunoCpf,
+    required int alunoId,
     required String dataRealizacao,
   }) async {
     final token = await _storage.read(key: 'token');
@@ -162,7 +164,7 @@ class ApiService {
       },
       body: jsonEncode({
         'treinoId': treinoId,
-        'alunoCpf': alunoCpf,
+        'alunoId': alunoId,
         'dataRealizacao': dataRealizacao,
       }),
     );
@@ -170,7 +172,29 @@ class ApiService {
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception('Erro ao finalizar treino: ${response.body}');
     }
+
+    // 🔥 Atualiza a dataRealizacao localmente no treino salvo
+    final treinos = await TreinoDestaqueService.getTreinosSalvos();
+    final alunoIndex = treinos.indexWhere(
+            (t) => t['aluno']['id'].toString() == alunoId.toString());
+
+    if (alunoIndex != -1) {
+      final treinosDoAluno = treinos[alunoIndex]['treinos'] as List<dynamic>;
+      final treinoIndex = treinosDoAluno.indexWhere((t) =>
+      t['id'].toString() == treinoId.toString() ||
+          t['treinoId'].toString() == treinoId.toString());
+
+      if (treinoIndex != -1) {
+        treinosDoAluno[treinoIndex]['dataRealizacao'] = dataRealizacao;
+        await _storage.write(
+            key: TreinoDestaqueService.storageKey, value: jsonEncode(treinos));
+      }
+    }
   }
+
+
+
+
 
 
   /// Lista de professores

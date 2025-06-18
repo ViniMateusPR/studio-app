@@ -1,5 +1,3 @@
-// lib/screens/treino/editar_treino_screen.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,13 +8,13 @@ import '../../models/treino_detalhado.dart';
 
 class EditarTreinoScreen extends StatefulWidget {
   final int treinoId;
-  final String alunoCpf;
+  final int alunoId;
   final String alunoNome;
 
   const EditarTreinoScreen({
     super.key,
     required this.treinoId,
-    required this.alunoCpf,
+    required this.alunoId,
     required this.alunoNome,
   });
 
@@ -59,7 +57,7 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
       'id': widget.treinoId,
       'descricao': _descricaoController.text.trim(),
       'data': DateTime.now().toIso8601String(),
-      'alunoCpf': widget.alunoCpf,
+      'alunoId': widget.alunoId,
       'personalCpf': cpfProf,
       'exercicios': _exercicios.map((e) => {
         'exercicioId': e.exercicioId,
@@ -73,7 +71,7 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
 
     await ApiService.atualizarTreinoDetalhado(widget.treinoId, treinoJson);
     await TreinoDestaqueService.adicionarTreinoCompleto({
-      'aluno': {'cpf': widget.alunoCpf, 'nome': widget.alunoNome},
+      'aluno': {'id': widget.alunoId, 'nome': widget.alunoNome},
       'treino': treinoJson,
     });
 
@@ -203,7 +201,7 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
               });
               Navigator.pop(ctxDialog, true);
             },
-            child: const Text('Salvar', style: TextStyle(color: Colors.white),),
+            child: const Text('Salvar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -243,10 +241,8 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
             title: const Text('Confirmar', style: TextStyle(color: Colors.orange)),
             content: const Text('Remover este exercício?', style: TextStyle(color: Colors.white)),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Não', style: TextStyle(color: Colors.white70))),
-              TextButton(onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Sim', style: TextStyle(color: Colors.orange))),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não', style: TextStyle(color: Colors.white70))),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim', style: TextStyle(color: Colors.orange))),
             ],
           ),
         );
@@ -275,7 +271,7 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFF6B00),
+        backgroundColor: const Color(0xFF121212),
         title: Text('Editar Treino • ${widget.alunoNome}'),
       ),
       body: FutureBuilder<TreinoDetalhado>(
@@ -307,20 +303,9 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
                 const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Data: ${_formatDate(snap.data!.data)}',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      const SizedBox(height: 4),
-                      if (snap.data!.criadoPorNome != null)
-                        Text(
-                          'Criado por: ${snap.data!.criadoPorNome}',
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                    ],
+                  child: Text(
+                    'Data: ${_formatDate(snap.data!.data)}',
+                    style: const TextStyle(color: Colors.white70),
                   ),
                 ),
                 const Divider(color: Colors.orange),

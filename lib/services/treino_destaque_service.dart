@@ -4,27 +4,53 @@ import 'dart:convert';
 class TreinoDestaqueService {
   static const _storage = FlutterSecureStorage();
   static const _key = 'treinos_destaque';
+  static String get storageKey => _key;
 
   static Future<List<Map<String, dynamic>>> getTreinosSalvos() async {
     final jsonString = await _storage.read(key: _key);
     if (jsonString == null) return [];
-    final List<dynamic> decoded = jsonDecode(jsonString);
+    final List decoded = jsonDecode(jsonString);
     return decoded.cast<Map<String, dynamic>>();
   }
 
-  static Future<void> adicionarTreinoCompleto(Map<String, dynamic> treinoCompleto) async {
-    final treinos = await getTreinosSalvos();
+  static Future<void> adicionarTreinoCompleto(Map<String, dynamic> data) async {
+    final treinosSalvos = await getTreinosSalvos();
 
-    // Remove qualquer treino anterior do mesmo aluno (CPF)
-    treinos.removeWhere((t) => t['aluno']['cpf'] == treinoCompleto['aluno']['cpf']);
-    treinos.add(treinoCompleto);
+    final aluno = data['aluno'] as Map<String, dynamic>;
+    final treino = Map<String, dynamic>.from(data['treino']);
 
-    await _storage.write(key: _key, value: jsonEncode(treinos));
+    final alunoId = aluno['id'].toString();
+
+    // 🔥 Verifica e adiciona data de realização, se não existir
+    treino['dataRealizacao'] = treino['dataRealizacao'] ?? DateTime.now().toIso8601String();
+
+    // Verifica se já existe esse aluno na lista
+    final index = treinosSalvos.indexWhere((item) {
+      final a = item['aluno'] as Map<String, dynamic>;
+      return a['id'].toString() == alunoId;
+    });
+
+    if (index != -1) {
+      // Já existe -> adiciona treino
+      treinosSalvos[index]['treinos'].add(treino);
+    } else {
+      // Não existe -> cria novo
+      treinosSalvos.add({
+        'aluno': {
+          'id': alunoId,
+          'nome': aluno['nome'],
+        },
+        'treinos': [treino],
+      });
+    }
+
+    await _storage.write(key: _key, value: jsonEncode(treinosSalvos));
   }
 
-  static Future<void> removerTreinoPorCpf(String cpf) async {
+
+  static Future<void> removerTreinoPorId(String alunoId) async {
     final treinos = await getTreinosSalvos();
-    treinos.removeWhere((t) => t['aluno']['cpf'] == cpf);
+    treinos.removeWhere((t) => t['aluno']['id'].toString() == alunoId);
     await _storage.write(key: _key, value: jsonEncode(treinos));
   }
 

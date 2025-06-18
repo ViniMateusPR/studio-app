@@ -1,5 +1,5 @@
 class Aluno {
-  final String cpf;
+  final int id;
   final String nome;
   final String email;
   final String? celular;
@@ -8,7 +8,7 @@ class Aluno {
   final int? empresaId;
 
   Aluno({
-    required this.cpf,
+    required this.id,
     required this.nome,
     required this.celular,
     required this.email,
@@ -19,7 +19,7 @@ class Aluno {
 
   factory Aluno.fromJson(Map<String, dynamic> json) {
     return Aluno(
-      cpf: json['cpf'],
+      id: json['id'],
       nome: json['nome'],
       celular: json['celular'],
       email: json['email'],

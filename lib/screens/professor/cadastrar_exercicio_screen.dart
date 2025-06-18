@@ -77,7 +77,7 @@ class _CadastrarExercicioScreenState extends State<CadastrarExercicioScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFF6B00),
+        backgroundColor: const Color(0xFF121212),
         title: const Text('Cadastrar Exercício'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),

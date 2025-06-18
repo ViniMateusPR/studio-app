@@ -16,7 +16,7 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
   List<Aluno> _alunos = [];
   List<Aluno> _alunosFiltrados = [];
   final TextEditingController _searchController = TextEditingController();
-  bool _mostrarAtivos = true; // já ativado por padrão
+  bool _mostrarAtivos = true;
 
   @override
   void initState() {
@@ -27,7 +27,7 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
   Future<List<dynamic>> _carregarAlunos() async {
     final data = await ApiService.listarAlunos();
     _alunos = data.map((e) => Aluno.fromJson(e)).toList();
-    _filtrarAlunos(_searchController.text); // aplica filtro inicial com ativos
+    _filtrarAlunos(_searchController.text);
     return data;
   }
 
@@ -45,8 +45,7 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
     return nome
         .toLowerCase()
         .split(' ')
-        .map((palavra) =>
-    palavra.isNotEmpty ? '${palavra[0].toUpperCase()}${palavra.substring(1)}' : '')
+        .map((palavra) => palavra.isNotEmpty ? '${palavra[0].toUpperCase()}${palavra.substring(1)}' : '')
         .join(' ');
   }
 
@@ -147,8 +146,7 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        margin:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: ListTile(
                           title: Text(
                             capitalizarNome(aluno.nome),
@@ -158,14 +156,12 @@ class _ListaAlunosProfessorScreenState extends State<ListaAlunosProfessorScreen>
                             'Email: ${aluno.email}',
                             style: const TextStyle(color: Colors.white70),
                           ),
-                          leading:
-                          const Icon(Icons.person, color: Color(0xFFFF6B00)),
+                          leading: const Icon(Icons.person, color: Color(0xFFFF6B00)),
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    MontarTreinoProfessorScreen(aluno: aluno),
+                                builder: (_) => MontarTreinoProfessorScreen(aluno: aluno),
                               ),
                             );
                           },
