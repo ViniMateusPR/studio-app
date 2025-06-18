@@ -1,5 +1,3 @@
-// lib/screens/treino/montar_treino_professor_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +5,7 @@ import '../../models/aluno.dart';
 import '../../services/api_service.dart';
 import '../../services/treino_destaque_service.dart';
 import '../home/home_professor_screen.dart';
+import '../treino/editar_treino_screen.dart';
 
 class MontarTreinoProfessorScreen extends StatefulWidget {
   final Aluno aluno;
@@ -35,9 +34,7 @@ class _MontarTreinoProfessorScreenState
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _carregarDados();
-    _tabController.addListener(() {
-      setState(() {}); // para mostrar/esconder FAB
-    });
+    _tabController.addListener(() => setState(() {}));
   }
 
   @override
@@ -51,13 +48,13 @@ class _MontarTreinoProfessorScreenState
     setState(() => _loading = true);
     try {
       final exercicios = await ApiService.getExerciciosAgrupados();
-      final treinos =
-      await ApiService.listarTreinosPorAluno(widget.aluno.cpf);
+      final treinos = await ApiService.listarTreinosPorAluno(widget.aluno.cpf);
       Map<String, dynamic>? ultimo;
       if (widget.aluno.ultimoTreinoId != null) {
         try {
           ultimo = await ApiService.getTreinoDetalhado(
-              widget.aluno.ultimoTreinoId!);
+            widget.aluno.ultimoTreinoId!,
+          );
         } catch (_) {}
       }
       setState(() {
@@ -75,9 +72,8 @@ class _MontarTreinoProfessorScreenState
   Future<void> _salvarTreino() async {
     final nomeTreino = _nomeTreinoController.text.trim();
     if (nomeTreino.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Digite o nome do treino.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Digite o nome do treino.')));
       return;
     }
     try {
@@ -104,12 +100,6 @@ class _MontarTreinoProfessorScreenState
   bool get _canSave =>
       _nomeTreinoController.text.trim().isNotEmpty &&
           _exerciciosSelecionados.isNotEmpty;
-
-  String _capitalize(String s) => s
-      .split(' ')
-      .map((w) =>
-  w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
-      .join(' ');
 
   Future<bool> _confirmExcluir() async {
     final ok = await showDialog<bool>(
@@ -155,33 +145,29 @@ class _MontarTreinoProfessorScreenState
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context, false),
         ),
-        title: Text('Treino de ${_capitalize(widget.aluno.nome)}'),
+        title: Text('Treino de ${widget.aluno.nome.split(' ').first}'),
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.orange,
-          tabs: const [
-            Tab(text: 'Histórico'),
-            Tab(text: 'Novo'),
-          ],
+          tabs: const [Tab(text: 'Histórico'), Tab(text: 'Novo')],
         ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Colors.orange))
           : TabBarView(
         controller: _tabController,
-        children: [
-          _buildHistorico(),
-          _buildNovoTreino(),
-        ],
+        children: [_buildHistorico(), _buildNovoTreino()],
       ),
       floatingActionButton: _tabController.index == 1
           ? FloatingActionButton.extended(
         backgroundColor: _canSave ? const Color(0xFFFF6B00) : Colors.grey,
         icon: const Icon(Icons.save, color: Colors.white),
-        label: Text('Salvar (${_exerciciosSelecionados.length})',
-            style: const TextStyle(color: Colors.white)),
+        label: Text(
+          'Salvar (${_exerciciosSelecionados.length})',
+          style: const TextStyle(color: Colors.white),
+        ),
         onPressed: _canSave ? _salvarTreino : null,
       )
           : null,
@@ -192,20 +178,18 @@ class _MontarTreinoProfessorScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Último treino (sem botão “+”)
         const Padding(
           padding: EdgeInsets.all(16),
-          child:
-          Text('Último Treino', style: TextStyle(color: Colors.orange, fontSize: 18)),
+          child: Text('Último Treino',
+              style: TextStyle(color: Colors.orange, fontSize: 18)),
         ),
         if (_ultimoTreino != null)
           PreviousWorkoutCard(
             data: _ultimoTreino!,
-            aluno: null, // aluno nulo = sem “+”
+            aluno: null,
+            mostrarAlteradoPor: false,
           ),
         const Divider(color: Colors.orange, height: 32),
-
-        // Treinos anteriores (com botão “+”)
         const Padding(
           padding: EdgeInsets.all(16),
           child: Text('Lista de Treinos',
@@ -230,7 +214,49 @@ class _MontarTreinoProfessorScreenState
                 },
                 child: PreviousWorkoutCard(
                   data: treino,
-                  aluno: widget.aluno, // aluno != null = aparece “+”
+                  aluno: widget.aluno,
+                  mostrarAlteradoPor: true,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.white70),
+                        onPressed: () async {
+                          final id = treino['id'] ?? treino['treino_id'];
+                          final ok = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EditarTreinoScreen(
+                                treinoId: id,
+                                alunoCpf: widget.aluno.cpf,
+                                alunoNome: widget.aluno.nome,
+                              ),
+                            ),
+                          );
+                          if (ok == true) _carregarDados();
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add, color: Colors.orange),
+                        onPressed: () async {
+                          final detalhes = await ApiService.getTreinoDetalhado(
+                              treino['treino_id'] ?? treino['id']);
+                          await TreinoDestaqueService.adicionarTreinoCompleto({
+                            'aluno': {
+                              'cpf': widget.aluno.cpf,
+                              'nome': widget.aluno.nome,
+                            },
+                            'treino': detalhes,
+                          });
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (_) => const HomeProfessorScreen()),
+                                (r) => false,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -255,7 +281,8 @@ class _MontarTreinoProfessorScreenState
               filled: true,
               fillColor: Color(0xFF1E1E1E),
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12))),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
             ),
           ),
         ),
@@ -295,11 +322,15 @@ class _MontarTreinoProfessorScreenState
 class PreviousWorkoutCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final Aluno? aluno;
+  final Widget? trailing;
+  final bool mostrarAlteradoPor;
 
   const PreviousWorkoutCard({
     super.key,
     required this.data,
     this.aluno,
+    this.trailing,
+    this.mostrarAlteradoPor = false,
   });
 
   @override
@@ -314,6 +345,7 @@ class PreviousWorkoutCard extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
         border: expired ? Border.all(color: Colors.red, width: 2) : null,
@@ -323,34 +355,25 @@ class PreviousWorkoutCard extends StatelessWidget {
         title: Text(
           data['descricao'] ?? '',
           style: TextStyle(
-              color: expired ? Colors.red : Colors.white,
-              fontWeight: FontWeight.bold),
+            color: expired ? Colors.red : Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        subtitle: Text('Data: $formatted',
-            style: const TextStyle(color: Colors.white70)),
-        trailing: aluno == null
-            ? null
-            : IconButton(
-          icon: const Icon(Icons.add, color: Colors.orange),
-          onPressed: () async {
-            final detalhes = await ApiService.getTreinoDetalhado(
-                data['treino_id'] ?? data['id']);
-            await TreinoDestaqueService.adicionarTreinoCompleto({
-              'aluno': {
-                'cpf': aluno!.cpf,
-                'nome': aluno!.nome,
-              },
-              'treino': detalhes,
-            });
-            // volta à HomeProfessorScreen
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const HomeProfessorScreen()),
-                  (r) => false,
-            );
-          },
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Data: $formatted',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            if (mostrarAlteradoPor && data['alteradoPorNome'] != null)
+              Text(
+                'Alterado por: ${data['alteradoPorNome']}',
+                style: const TextStyle(color: Colors.white70),
+              ),
+          ],
         ),
+        trailing: trailing,
       ),
     );
   }
@@ -376,8 +399,7 @@ class ExerciseGroupTile extends StatelessWidget {
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
         title: Text(groupName,
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold)),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         iconColor: Colors.orange,
         collapsedIconColor: Colors.orange,
         children: exercises
@@ -414,8 +436,8 @@ class _ExerciseItemState extends State<ExerciseItem> {
   @override
   void initState() {
     super.initState();
-    _isSelected = widget.selectedList
-        .any((e) => e['exercicioId'] == widget.data['id']);
+    _isSelected =
+        widget.selectedList.any((e) => e['exercicioId'] == widget.data['id']);
   }
 
   @override
@@ -432,11 +454,7 @@ class _ExerciseItemState extends State<ExerciseItem> {
           checkColor: Colors.black,
           onChanged: (sel) {
             setState(() => _isSelected = sel!);
-            widget.onSelect({
-              'exercicio': widget.data,
-              'selected': sel,
-              'index': idx,
-            });
+            widget.onSelect({'exercicio': widget.data, 'selected': sel, 'index': idx});
           },
         ),
         if (_isSelected)
@@ -461,8 +479,7 @@ class ExerciseFields extends StatelessWidget {
       const SizedBox(height: 8),
       NumberField(label: 'Séries', model: model, keyName: 'series'),
       const SizedBox(height: 8),
-      NumberField(
-          label: 'Repetições', model: model, keyName: 'repeticoes'),
+      NumberField(label: 'Repetições', model: model, keyName: 'repeticoes'),
       const SizedBox(height: 8),
       NumberField(label: 'Carga (kg)', model: model, keyName: 'carga'),
       const SizedBox(height: 8),
