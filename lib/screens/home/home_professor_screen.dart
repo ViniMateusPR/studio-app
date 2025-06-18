@@ -1,5 +1,3 @@
-// lib/screens/home/home_professor_screen.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -22,6 +20,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
   late PageController _pageController;
   bool _loading = true;
   int _selectedIndex = 0;
+  String nomeProfessor = '';
   List<Map<String, dynamic>> _alunosComTreinos = [];
   Map<String, bool> _checkboxStatus = {};
 
@@ -33,6 +32,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     super.initState();
     _pageController = PageController();
     _loadAll();
+    _loadNomeProfessor();
   }
 
   @override
@@ -41,14 +41,20 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     super.dispose();
   }
 
+  Future<void> _loadNomeProfessor() async {
+    final nome = await _storage.read(key: 'nome');
+    setState(() {
+      nomeProfessor = nome ?? '';
+    });
+  }
+
   Future<void> _loadAll() async {
     setState(() => _loading = true);
-    // Carrega status dos checkboxes
     final jsonString = await _storage.read(key: 'checkbox_status');
     if (jsonString != null) {
       _checkboxStatus = Map<String, bool>.from(jsonDecode(jsonString));
     }
-    // Carrega treinos do storage local
+
     final salvos = await TreinoDestaqueService.getTreinosSalvos();
     final grouped = <String, Map<String, dynamic>>{};
     for (var item in salvos) {
@@ -76,16 +82,16 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     }
   }
 
-  Future<void> _saveCheckbox() =>
-      _storage.write(key: 'checkbox_status', value: jsonEncode(_checkboxStatus));
+  Future<void> _saveCheckbox() => _storage.write(
+      key: 'checkbox_status', value: jsonEncode(_checkboxStatus));
 
   void _toggleCheckbox(String key, bool val) {
     setState(() => _checkboxStatus[key] = val);
     _saveCheckbox();
   }
 
-  Future<bool> _handleDismiss(BuildContext ctx, String cpf, bool isFinish) async {
-    // Pergunta de confirmação
+  Future<bool> _handleDismiss(
+      BuildContext ctx, String cpf, bool isFinish) async {
     final action = isFinish ? 'finalizar' : 'cancelar';
     final confirmed = await showDialog<bool>(
       context: ctx,
@@ -113,7 +119,6 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     );
     if (confirmed != true) return false;
 
-    // Se for finalizar, chama a API
     if (isFinish) {
       final alunoItem = _alunosComTreinos.firstWhere((a) => a['cpf'] == cpf);
       final treino = alunoItem['treinos'].last as Map<String, dynamic>;
@@ -129,7 +134,6 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
       }
     }
 
-    // Remove do storage e da lista em memória
     await TreinoDestaqueService.removerTreinoPorCpf(cpf);
     setState(() {
       _alunosComTreinos.removeWhere((a) => a['cpf'] == cpf);
@@ -148,7 +152,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
         ),
       ),
     );
-    return false; // já removemos manualmente
+    return false;
   }
 
   Future<void> _logout() async {
@@ -164,13 +168,10 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
         backgroundColor: const Color(0xFFFF6B00),
-        title: Text(
-          hasData
-              ? _alunosComTreinos[_selectedIndex]['nome']
-              : 'Professor',
-          style: const TextStyle(color: Colors.white),
-        ),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
+
       drawer: _buildDrawer(),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Colors.orange))
@@ -179,12 +180,15 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
         controller: _pageController,
         itemCount: _alunosComTreinos.length,
         onPageChanged: (i) => setState(() => _selectedIndex = i),
-        itemBuilder: (_, i) =>
-            _buildTreinosAluno(_alunosComTreinos[i]),
+        itemBuilder: (_, i) => _buildTreinosAluno(_alunosComTreinos[i]),
       )
-          : const Center(
-        child: Text('Nenhum treino salvo.',
-            style: TextStyle(color: Colors.white70)),
+          : Center(
+        child: Text(
+          'Bem-vindo, $nomeProfessor 👋',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              color: Colors.white70, fontSize: 18),
+        ),
       ),
       bottomNavigationBar:
       hasData ? _buildBottomNav() : const SizedBox.shrink(),
@@ -222,8 +226,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
         ),
         ListTile(
           leading: const Icon(Icons.logout, color: Colors.white),
-          title:
-          const Text('Sair', style: TextStyle(color: Colors.white)),
+          title: const Text('Sair', style: TextStyle(color: Colors.white)),
           onTap: _logout,
         ),
       ],
@@ -268,7 +271,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        aluno['nome'],
+                        aluno['nome'].toString().split(' ').first,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: isSel
@@ -314,14 +317,12 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
 
         return Dismissible(
           key: ValueKey('$cpf-${treino['id'] ?? treino['treinoId']}-$idx'),
-          // 👉 arrastar para a direita finaliza
           background: Container(
             alignment: Alignment.centerLeft,
             color: Colors.green,
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: const Icon(Icons.check, color: Colors.white),
           ),
-          // 👈 arrastar para a esquerda cancela
           secondaryBackground: Container(
             alignment: Alignment.centerRight,
             color: Colors.red,
@@ -332,7 +333,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
             final isFinish = direction == DismissDirection.startToEnd;
             return _handleDismiss(context, cpf, isFinish);
           },
-          onDismissed: (_) {}, // já tratamos na lógica
+          onDismissed: (_) {},
           child: Card(
             color: const Color(0xFF1E1E1E),
             margin: const EdgeInsets.symmetric(vertical: 8),
@@ -341,7 +342,6 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // header: descrição + editar
                   Row(
                     children: [
                       Expanded(

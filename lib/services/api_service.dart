@@ -1,5 +1,3 @@
-// lib/services/api_service.dart
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -19,7 +17,6 @@ class ApiService {
     }
   }
 
-  /// Recupera o CPF do professor logado
   static Future<String?> getCpfLogado() async {
     return await _storage.read(key: 'cpf');
   }

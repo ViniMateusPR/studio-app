@@ -36,6 +36,7 @@ class AuthService {
       final data = jsonDecode(resp.body);
       await _storage.write(key: 'token', value: data['token']);
       await _storage.write(key: 'cpf', value: data['cpf']);
+      await _storage.write(key: 'nome',value:  data['nome']);
       return true;
     }
     return false;
