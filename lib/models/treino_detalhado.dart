@@ -1,45 +1,47 @@
-
-
 class TreinoDetalhado {
-  final int id;
+  final int treinoId;
   final String descricao;
   final String data;
   final String alunoCpf;
   final String personalCpf;
   final List<TreinoExercicioDetalhado> exercicios;
+  final String? alteradoPorNome;
+  final String? criadoPorNome; // <-- adiciona isso
 
   TreinoDetalhado({
-    required this.id,
+    required this.treinoId,
     required this.descricao,
     required this.data,
     required this.alunoCpf,
     required this.personalCpf,
     required this.exercicios,
+    this.alteradoPorNome,
+    this.criadoPorNome, // <-- adiciona isso
   });
 
   factory TreinoDetalhado.fromJson(Map<String, dynamic> json) {
+    final List<dynamic> exList = json['exercicios'] ?? [];
     return TreinoDetalhado(
-      id: json['id'] ?? json['treinoId'],
-      descricao: json['descricao'],
+      treinoId: json['treinoId'] ?? json['id'],
+      descricao: json['descricao'] ?? '',
       data: json['data'],
-      alunoCpf: json['alunoCpf'],
-      personalCpf: json['personalCpf'],
-      exercicios: (json['exercicios'] as List<dynamic>)
-          .map((e) => TreinoExercicioDetalhado.fromJson(e))
-          .toList(),
+      alunoCpf: json['alunoCpf'] ?? '',
+      personalCpf: json['personalCpf'] ?? '',
+      alteradoPorNome: json['alteradoPorNome'],
+      criadoPorNome: json['criadoPorNome'], // <-- adiciona isso
+      exercicios: exList.map((e) => TreinoExercicioDetalhado.fromJson(e)).toList(),
     );
   }
-
 }
 
 class TreinoExercicioDetalhado {
   final int exercicioId;
   final String nomeExercicio;
-  final int ordem;
-  final int series;
-  final int repeticoes;
-  final String? observacao;
-  final int carga;
+  int ordem;
+  int series;
+  int repeticoes;
+  String? observacao;
+  int carga;
 
   TreinoExercicioDetalhado({
     required this.exercicioId,
@@ -48,20 +50,18 @@ class TreinoExercicioDetalhado {
     required this.series,
     required this.repeticoes,
     this.observacao,
-    required this.carga
+    required this.carga,
   });
 
   factory TreinoExercicioDetalhado.fromJson(Map<String, dynamic> json) {
     return TreinoExercicioDetalhado(
-      exercicioId: json['exercicioId'] ?? 0,
+      exercicioId: json['exercicioId'],
       nomeExercicio: json['nomeExercicio'] ?? '',
-      ordem: json['ordem'] ?? 0,
-      series: json['series'] ?? 0,
-      repeticoes: json['repeticoes'] ?? 0,
+      ordem: json['ordem'],
+      series: json['series'],
+      repeticoes: json['repeticoes'],
       observacao: json['observacao'],
       carga: json['carga'],
     );
   }
-
-
 }

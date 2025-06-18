@@ -1,4 +1,5 @@
 // lib/screens/treino/editar_treino_screen.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -67,7 +68,6 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
         'repeticoes': e.repeticoes,
         'observacao': e.observacao,
         'carga': e.carga,
-        'nomeExercicio': e.nomeExercicio,
       }).toList(),
     };
 
@@ -307,9 +307,20 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
                 const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Data: ${_formatDate(snap.data!.data)}',
-                    style: const TextStyle(color: Colors.white70),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Data: ${_formatDate(snap.data!.data)}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 4),
+                      if (snap.data!.criadoPorNome != null)
+                        Text(
+                          'Criado por: ${snap.data!.criadoPorNome}',
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                    ],
                   ),
                 ),
                 const Divider(color: Colors.orange),
