@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:studio_app/screens/home/home_empresa_screen.dart';
 import 'package:studio_app/screens/home/home_professor_screen.dart';
 import 'package:studio_app/screens/treino/montar_treino_empresa_screen.dart';
 import '../../services/api_service.dart';
@@ -58,7 +59,7 @@ class _ListaAlunosScreenState extends State<ListaAlunosScreen> {
           onPressed: () {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (_) => const HomeProfessorScreen()),
+              MaterialPageRoute(builder: (_) => const HomeEmpresaScreen()),
             );
           },
         ),

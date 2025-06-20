@@ -121,7 +121,7 @@ class _LoginProfessorScreenState extends State<LoginProfessorScreen> {
                           validator: (v) {
                             if (v == null || v.isEmpty)
                               return 'Informe a senha';
-                            if (v.length < 6) return 'Senha muito curta';
+                            if (v.length < 4) return 'Senha muito curta';
                             return null;
                           },
                         ),

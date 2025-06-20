@@ -16,7 +16,16 @@ class ApiService {
     if (idStr != null) {
       empresaId = int.tryParse(idStr) ?? 0;
     }
+
   }
+  static Future<Map<String, String>> headers() async {
+    final t = token ?? await _storage.read(key: 'token');
+    return {
+      'Content-Type': 'application/json',
+      if (t != null) 'Authorization': 'Bearer $t',
+    };
+  }
+
 
   static Future<String?> getCpfLogado() async {
     return await _storage.read(key: 'cpf');
@@ -192,8 +201,27 @@ class ApiService {
     }
   }
 
+  static Future<List<dynamic>> getProfessoresComFinalizacoes() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/empresa/$empresaId/professores/finalizacoes-dia'),
+      headers: await headers(),
+    );
 
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as List<dynamic>;
+    } else {
+      throw Exception('Erro ao buscar dados');
+    }
+  }
 
+  static Future<List<dynamic>> getAlunosFinalizadosPorProfessor(String professorId) async {
+    final resp = await get('/empresa/$empresaId/professor/$professorId/alunos-finalizados');
+    return resp as List<dynamic>;
+  }
+  static Future<List<dynamic>> getTreinosVencidos() async {
+    final resp = await get('/empresa/$empresaId/treinos-vencidos');
+    return resp as List<dynamic>;
+  }
 
 
 

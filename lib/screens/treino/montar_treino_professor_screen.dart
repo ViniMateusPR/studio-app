@@ -33,9 +33,11 @@ class _MontarTreinoProfessorScreenState
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _nomeTreinoController.addListener(() => setState(() {})); //<-- Aqui
     _carregarDados();
     _tabController.addListener(() => setState(() {}));
   }
+
 
   @override
   void dispose() {
