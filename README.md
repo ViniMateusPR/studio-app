@@ -53,7 +53,7 @@ Um aplicativo móvel desenvolvido em Flutter para gerenciamento de estúdios de 
 
 * Flutter SDK (Versão 3.x.x ou superior recomendada)
 * Um emulador Android/iOS configurado ou um dispositivo físico.
-* Acesso à API de backend. A URL base da API utilizada durante o desenvolvimento é: `https://8963-2804-984-863-4d00-682e-2911-2ebb-81cb.ngrok-free.app`. Certifique-se de que esta API esteja acessível ou substitua pela URL do seu ambiente.
+* Acesso à API de backend. A URL base da API utilizada durante o desenvolvimento é: seu localhost. Certifique-se de que esta API esteja acessível ou substitua pela URL do seu ambiente.
 
 ### Passos para Rodar
 
