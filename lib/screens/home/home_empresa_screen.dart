@@ -190,9 +190,9 @@ class _HomeEmpresaScreenState extends State<HomeEmpresaScreen> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        const Icon(Icons.thumb_up,
+                        const Icon(Icons.favorite,
                             size: 20,
-                            color: AppColors.accent),
+                            color: Colors.redAccent),
                         const SizedBox(width: 4),
                         Text('$curtidas'),
                         const SizedBox(width: 16),
