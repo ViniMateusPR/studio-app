@@ -9,7 +9,7 @@ class CadastroService {
     required String email,
     required String celular,
     required String senha,
-    required int empresaId,
+    required int empresaId, required String sexo, required String dataNascimento,
   }) async {
     final response = await http.post(
       Uri.parse('${ApiService.baseUrl}/aluno/register'),
@@ -24,6 +24,8 @@ class CadastroService {
         'celular': celular,
         'senha': senha,
         'empresaId': empresaId,
+        'sexo': sexo,
+        'dataNascimento': dataNascimento,
         'ativo': true,  // fixo aqui
       }),
     );

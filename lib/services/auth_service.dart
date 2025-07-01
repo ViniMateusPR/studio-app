@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthService {
   final _storage = const FlutterSecureStorage();
-  final String _baseUrl = 'https://f8c0-168-197-141-209.ngrok-free.app';
+  final String _baseUrl = 'https://a770-168-197-141-209.ngrok-free.app';
 
   /// Login da empresa
   Future<bool> login({required String cnpj, required String senha}) async {
@@ -58,6 +58,32 @@ class AuthService {
       return true;
     }
     return false;
+  }
+
+  /// Solicitar redefinição de senha
+  Future<bool> requestPasswordReset(String cpf) async {
+    final url = Uri.parse('$_baseUrl/senha/professor/request-password-reset');
+    final resp = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'cpf': cpf}),
+    );
+    return resp.statusCode == 200;
+  }
+
+  /// Redefinir senha do professor
+  Future<bool> resetPassword({required String cpf, required String token, required String novaSenha}) async {
+    final url = Uri.parse('$_baseUrl/senha/professor/reset-password');
+    final resp = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'cpf': cpf,
+        'token': token,
+        'novaSenha': novaSenha,
+      }),
+    );
+    return resp.statusCode == 200;
   }
 
   Future<void> logout() async => _storage.deleteAll();

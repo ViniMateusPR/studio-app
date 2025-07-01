@@ -1,10 +1,13 @@
-import 'dart:convert';
+// lib/screens/treino/editar_treino_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
+
+import '../../app_theme.dart';
+import '../../models/treino_detalhado.dart';
 import '../../services/api_service.dart';
 import '../../services/treino_destaque_service.dart';
-import '../../models/treino_detalhado.dart';
 
 class EditarTreinoScreen extends StatefulWidget {
   final int treinoId;
@@ -12,21 +15,24 @@ class EditarTreinoScreen extends StatefulWidget {
   final String alunoNome;
 
   const EditarTreinoScreen({
-    super.key,
+    Key? key,
     required this.treinoId,
     required this.alunoId,
     required this.alunoNome,
-  });
+  }) : super(key: key);
 
   @override
   State<EditarTreinoScreen> createState() => _EditarTreinoScreenState();
 }
 
 class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
-  late Future<TreinoDetalhado> _futureTreino;
+  final _formKey = GlobalKey<FormState>();
   final _descricaoController = TextEditingController();
   final _storage = const FlutterSecureStorage();
+
+  late Future<TreinoDetalhado> _futureTreino;
   List<TreinoExercicioDetalhado> _exercicios = [];
+  bool _saving = false;
 
   @override
   void initState() {
@@ -44,14 +50,16 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
 
   String _formatDate(String iso) {
     try {
-      final dt = DateTime.parse(iso);
-      return DateFormat('dd/MM/yyyy').format(dt);
+      return DateFormat('dd/MM/yyyy').format(DateTime.parse(iso));
     } catch (_) {
       return iso;
     }
   }
 
   Future<void> _saveTreino() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+
     final cpfProf = await ApiService.getCpfLogado();
     final treinoJson = {
       'id': widget.treinoId,
@@ -69,24 +77,42 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
       }).toList(),
     };
 
-    await ApiService.atualizarTreinoDetalhado(widget.treinoId, treinoJson);
-    await TreinoDestaqueService.adicionarTreinoCompleto({
-      'aluno': {'id': widget.alunoId, 'nome': widget.alunoNome},
-      'treino': treinoJson,
-    });
+    try {
+      // 1) atualiza no servidor
+      await ApiService.atualizarTreinoDetalhado(widget.treinoId, treinoJson);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Treino atualizado com sucesso!')),
-    );
-    Navigator.pop(context, true);
+      // 2) refetch do objeto "detalhado", que já traz os nomeExercicio
+      final detalhe = await ApiService.getTreinoDetalhado(widget.treinoId);
+
+      // 3) salva no destaque **esse** objeto completo
+      await TreinoDestaqueService.adicionarTreinoCompleto({
+        'aluno': {'id': widget.alunoId, 'nome': widget.alunoNome},
+        'treinos': [detalhe],
+      });
+
+      // 4) feedback e volta
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Treino atualizado com sucesso!')),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao atualizar treino: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
+
 
   Future<void> _addExercicio() async {
     final todos = await ApiService.getExercicios();
     final existentes = _exercicios.map((e) => e.exercicioId).toSet();
     final disponiveis = todos.where((e) => !existentes.contains(e['id'])).toList();
-
     if (disponiveis.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Todos os exercícios já foram adicionados.')),
@@ -94,55 +120,59 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
       return;
     }
 
-    final Map<String, List<dynamic>> grupos = {};
+    final grupos = <String, List<dynamic>>{};
     for (var ex in disponiveis) {
       final g = ex['grupoMuscular'] ?? 'Outros';
       grupos.putIfAbsent(g, () => []).add(ex);
     }
 
-    showDialog<bool>(
+    await showDialog<void>(
       context: context,
-      builder: (ctxDialog) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Adicionar Exercício', style: TextStyle(color: Colors.orange)),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: ListView(
-            children: grupos.entries.map((entry) {
-              return Theme(
-                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  title: Text(entry.key,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  iconColor: Colors.orange,
-                  collapsedIconColor: Colors.orange,
-                  children: entry.value.map((ex) {
-                    return ListTile(
-                      title: Text(ex['nome'], style: const TextStyle(color: Colors.white)),
-                      trailing: const Icon(Icons.add, color: Colors.orange),
-                      onTap: () {
-                        setState(() {
-                          _exercicios.add(TreinoExercicioDetalhado(
-                            exercicioId: ex['id'],
-                            nomeExercicio: ex['nome'],
-                            ordem: _exercicios.length + 1,
-                            series: 3,
-                            repeticoes: 10,
-                            observacao: '',
-                            carga: 0,
-                          ));
-                        });
-                        Navigator.pop(ctxDialog, true);
-                      },
-                    );
-                  }).toList(),
-                ),
-              );
-            }).toList(),
+      builder: (ctx) {
+        return Theme(
+          data: Theme.of(ctx).copyWith(dividerColor: Colors.transparent),
+          child: AlertDialog(
+            backgroundColor: Theme.of(ctx).colorScheme.surface,
+            title: const Text('Adicionar Exercício', style: TextStyle(color: AppColors.accent)),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: ListView(
+                children: grupos.entries.map((entry) {
+                  return ExpansionTile(
+                    title: Text(entry.key,
+                        style: const TextStyle(color: AppColors.onSurface, fontWeight: FontWeight.bold)),
+                    iconColor: AppColors.accent,
+                    collapsedIconColor: AppColors.accent,
+                    children: entry.value.map((ex) {
+                      return ListTile(
+                        title: Text(ex['nome'], style: const TextStyle(color: AppColors.onSurface)),
+                        trailing: Icon(Icons.add, color: AppColors.accent),
+                        onTap: () {
+                          setState(() {
+                            _exercicios.add(
+                              TreinoExercicioDetalhado(
+                                exercicioId: ex['id'],
+                                nomeExercicio: ex['nome'],
+                                ordem: _exercicios.length + 1,
+                                series: 3,
+                                repeticoes: 10,
+                                observacao: '',
+                                carga: 0,
+                              ),
+                            );
+                          });
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    }).toList(),
+                  );
+                }).toList(),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -151,75 +181,75 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
     final sCtrl = TextEditingController(text: ex.series.toString());
     final rCtrl = TextEditingController(text: ex.repeticoes.toString());
     final cCtrl = TextEditingController(text: ex.carga.toString());
-    final oCtrl = TextEditingController(text: ex.observacao ?? '');
+    final oCtrl = TextEditingController(text: ex.observacao);
 
-    showDialog<bool>(
+    showDialog<void>(
       context: context,
-      builder: (ctxDialog) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Editar Exercício', style: TextStyle(color: Colors.orange)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _numberField('Séries', sCtrl),
-            const SizedBox(height: 8),
-            _numberField('Repetições', rCtrl),
-            const SizedBox(height: 8),
-            _numberField('Carga (kg)', cCtrl, decimal: true),
-            const SizedBox(height: 8),
-            TextField(
-              controller: oCtrl,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Observação',
-                filled: true,
-                fillColor: Color(0xFF2C2C2C),
-                labelStyle: TextStyle(color: Colors.white70),
-                border: OutlineInputBorder(),
-              ),
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: Theme.of(ctx).colorScheme.surface,
+          title: const Text('Editar Exercício', style: TextStyle(color: AppColors.accent)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _numberField(ctx, 'Séries', sCtrl),
+                const SizedBox(height: 8),
+                _numberField(ctx, 'Repetições', rCtrl),
+                const SizedBox(height: 8),
+                _numberField(ctx, 'Carga (kg)', cCtrl),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: oCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Observação',
+                    filled: true,
+                    fillColor: Theme.of(ctx).colorScheme.surface,
+                  ),
+                  style: const TextStyle(color: AppColors.onSurface),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar', style: TextStyle(color: AppColors.onSurfaceLight)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+              onPressed: () {
+                setState(() {
+                  _exercicios[idx] = TreinoExercicioDetalhado(
+                    exercicioId: ex.exercicioId,
+                    nomeExercicio: ex.nomeExercicio,
+                    ordem: ex.ordem,
+                    series: int.tryParse(sCtrl.text) ?? ex.series,
+                    repeticoes: int.tryParse(rCtrl.text) ?? ex.repeticoes,
+                    observacao: oCtrl.text,
+                    carga: int.tryParse(cCtrl.text) ?? ex.carga,
+                  );
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text('Salvar', style: TextStyle(color: AppColors.onSurface)),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctxDialog, false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            onPressed: () {
-              setState(() {
-                _exercicios[idx] = TreinoExercicioDetalhado(
-                  exercicioId: ex.exercicioId,
-                  nomeExercicio: ex.nomeExercicio,
-                  ordem: ex.ordem,
-                  series: int.tryParse(sCtrl.text) ?? ex.series,
-                  repeticoes: int.tryParse(rCtrl.text) ?? ex.repeticoes,
-                  observacao: oCtrl.text,
-                  carga: int.tryParse(cCtrl.text) ?? ex.carga,
-                );
-              });
-              Navigator.pop(ctxDialog, true);
-            },
-            child: const Text('Salvar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _numberField(String label, TextEditingController ctrl, {bool decimal = false}) {
+  Widget _numberField(BuildContext ctx, String label, TextEditingController ctrl) {
     return TextField(
       controller: ctrl,
-      keyboardType: TextInputType.numberWithOptions(decimal: decimal),
-      style: const TextStyle(color: Colors.white),
+      keyboardType: TextInputType.number,
       decoration: InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: const Color(0xFF2C2C2C),
-        labelStyle: const TextStyle(color: Colors.white70),
-        border: const OutlineInputBorder(),
+        fillColor: Theme.of(ctx).colorScheme.surface,
       ),
+      style: const TextStyle(color: AppColors.onSurface),
     );
   }
 
@@ -234,31 +264,32 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
       ),
       direction: DismissDirection.endToStart,
       confirmDismiss: (_) async {
-        final confirm = await showDialog<bool>(
+        final ok = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            backgroundColor: const Color(0xFF1E1E1E),
-            title: const Text('Confirmar', style: TextStyle(color: Colors.orange)),
-            content: const Text('Remover este exercício?', style: TextStyle(color: Colors.white)),
+            backgroundColor: Theme.of(ctx).colorScheme.surface,
+            title: const Text('Confirmar', style: TextStyle(color: AppColors.accent)),
+            content: const Text('Remover este exercício?', style: TextStyle(color: AppColors.onSurface)),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não', style: TextStyle(color: Colors.white70))),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim', style: TextStyle(color: Colors.orange))),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não', style: TextStyle(color: AppColors.onSurfaceLight))),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim', style: TextStyle(color: AppColors.accent))),
             ],
           ),
         );
-        if (confirm == true) setState(() => _exercicios.removeAt(idx));
-        return confirm == true;
+        if (ok == true) setState(() => _exercicios.removeAt(idx));
+        return ok == true;
       },
       child: Card(
-        color: const Color(0xFF1E1E1E),
+        color: Theme.of(context).colorScheme.surface,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: ListTile(
-          title: Text(ex.nomeExercicio, style: const TextStyle(color: Colors.white)),
+          title: Text(ex.nomeExercicio, style: const TextStyle(color: AppColors.onSurface)),
           subtitle: Text(
             '${ex.series}x${ex.repeticoes} • ${ex.carga}kg\n${ex.observacao}',
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: AppColors.onSurfaceLight),
           ),
           trailing: IconButton(
-            icon: const Icon(Icons.edit, color: Colors.orange),
+            icon: const Icon(Icons.edit, color: AppColors.accent),
             onPressed: () => _editExercicio(idx),
           ),
         ),
@@ -268,79 +299,90 @@ class _EditarTreinoScreenState extends State<EditarTreinoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF121212),
-        title: Text('Editar Treino • ${widget.alunoNome}'),
-      ),
+      backgroundColor: theme.colorScheme.background,
+      appBar: AppBar(title: Text('Editar Treino • ${widget.alunoNome}')),
       body: FutureBuilder<TreinoDetalhado>(
         future: _futureTreino,
         builder: (ctx, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.orange));
+            return const Center(child: CircularProgressIndicator());
           }
           if (snap.hasError) {
-            return Center(
-              child: Text('Erro: ${snap.error}', style: const TextStyle(color: Colors.white)),
-            );
+            return Center(child: Text('Erro: ${snap.error}', style: theme.textTheme.bodyMedium));
           }
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _descricaoController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'Descrição',
-                    filled: true,
-                    fillColor: Color(0xFF1E1E1E),
-                    labelStyle: TextStyle(color: Colors.white70),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Data: ${_formatDate(snap.data!.data)}',
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                ),
-                const Divider(color: Colors.orange),
-                Expanded(
-                  child: _exercicios.isEmpty
-                      ? const Center(child: Text('Nenhum exercício', style: TextStyle(color: Colors.white70)))
-                      : ListView.builder(
-                    itemCount: _exercicios.length,
-                    itemBuilder: (_, i) => _buildExercicioTile(_exercicios[i], i),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                        icon: const Icon(Icons.add, color: Colors.white),
-                        label: const Text('Adicionar', style: TextStyle(color: Colors.white)),
-                        onPressed: _addExercicio,
+          return Stack(
+            children: [
+              Column(
+                children: [
+                  // Descrição
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Form(
+                      key: _formKey,
+                      child: TextFormField(
+                        controller: _descricaoController,
+                        decoration: const InputDecoration(labelText: 'Descrição'),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Descrição é obrigatória' : null,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                        icon: const Icon(Icons.save, color: Colors.white),
-                        label: const Text('Salvar', style: TextStyle(color: Colors.white)),
-                        onPressed: _saveTreino,
-                      ),
+                  ),
+
+                  // Data
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Data: ${_formatDate(snap.data!.data)}',
+                          style: theme.textTheme.titleMedium),
                     ),
-                  ],
+                  ),
+                  const Divider(color: AppColors.accent),
+
+                  // Exercícios
+                  Expanded(
+                    child: _exercicios.isEmpty
+                        ? Center(child: Text('Nenhum exercício', style: theme.textTheme.bodyMedium))
+                        : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: _exercicios.length,
+                      itemBuilder: (_, i) => _buildExercicioTile(_exercicios[i], i),
+                    ),
+                  ),
+
+                  // Botões
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.add),
+                            label: const Text('Adicionar'),
+                            onPressed: _addExercicio,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.save),
+                            label: const Text('Salvar'),
+                            onPressed: _saving ? null : _saveTreino,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              if (_saving)
+                Container(
+                  color: Colors.black26,
+                  child: const Center(child: CircularProgressIndicator()),
                 ),
-              ],
-            ),
+            ],
           );
         },
       ),

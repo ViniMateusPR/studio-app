@@ -1,6 +1,8 @@
 // lib/screens/professor/cadastrar_exercicio_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
+import '../../app_theme.dart';
 import '../../services/api_service.dart';
 import '../home/home_professor_screen.dart';
 
@@ -16,34 +18,41 @@ class _CadastrarExercicioScreenState extends State<CadastrarExercicioScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nomeController = TextEditingController();
   String? _grupoSelecionado;
+  bool _erroGrupo = false;
   List<String> _gruposMusculares = [];
   bool _loading = true;
+
+  bool get _isNomeValido => _nomeController.text.trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    _buscarGruposMusculares();
+    _fetchGrupos();
+    _nomeController.addListener(() => setState(() {}));
   }
 
-  Future<void> _buscarGruposMusculares() async {
+  Future<void> _fetchGrupos() async {
     try {
-      final response = await ApiService.getExercicios();
-      final grupos = response
+      final lista = await ApiService.getExercicios();
+      final grupos = lista
           .map<String>((e) => e['grupoMuscular'].toString())
           .toSet()
           .toList()
         ..sort();
       setState(() {
         _gruposMusculares = grupos;
-        _loading = false;
       });
     } catch (_) {
+      // falha silenciosa
+    } finally {
       setState(() => _loading = false);
     }
   }
 
-  Future<void> _salvarExercicio() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _salvar() async {
+    setState(() => _erroGrupo = _grupoSelecionado == null);
+    if (!_isNomeValido || !_formKey.currentState!.validate() || _erroGrupo)
+      return;
     try {
       await ApiService.post(
         '/exercicios/cadastrar',
@@ -66,6 +75,74 @@ class _CadastrarExercicioScreenState extends State<CadastrarExercicioScreen> {
     }
   }
 
+  void _abrirSelecaoGrupo() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.primary,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Escolha o Grupo',
+                      style: TextStyle(
+                        color: AppColors.onSurface,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: AppColors.onSurfaceLight),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: AppColors.surface),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: _gruposMusculares.length,
+                separatorBuilder: (_, __) => const Divider(color: AppColors.surface),
+                itemBuilder: (context, i) {
+                  final g = _gruposMusculares[i];
+                  final selected = g == _grupoSelecionado;
+                  return ListTile(
+                    title: Text(
+                      g,
+                      style: TextStyle(
+                        color: selected ? AppColors.accent : AppColors.onSurface,
+                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    trailing: selected
+                        ? const Icon(Icons.check, color: AppColors.accent)
+                        : null,
+                    onTap: () {
+                      setState(() {
+                        _grupoSelecionado = g;
+                        _erroGrupo = false;
+                      });
+                      Navigator.pop(ctx);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _nomeController.dispose();
@@ -75,12 +152,12 @@ class _CadastrarExercicioScreenState extends State<CadastrarExercicioScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: AppColors.primary,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF121212),
-        title: const Text('Cadastrar Exercício'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        leading: BackButton(
+          color: AppColors.onSurface,
           onPressed: () {
             Navigator.pushReplacement(
               context,
@@ -88,87 +165,114 @@ class _CadastrarExercicioScreenState extends State<CadastrarExercicioScreen> {
             );
           },
         ),
+        title: const Text('Cadastrar Exercício'),
       ),
       body: _loading
-          ? const Center(
-        child: CircularProgressIndicator(color: Colors.orange),
-      )
+          ? _buildShimmer()
           : Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
           child: ListView(
             children: [
-              // — Nome do exercício —
+              // Nome do Exercício
               TextFormField(
                 controller: _nomeController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Nome do Exercício',
-                  hintStyle: const TextStyle(color: Colors.white70),
-                  filled: true,
-                  fillColor: const Color(0xFF1E1E1E),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
+                style: const TextStyle(color: AppColors.onSurface),
+                decoration: const InputDecoration(
+                  labelText: 'Nome do Exercício',
                 ),
                 validator: (v) => v == null || v.trim().isEmpty
                     ? 'Campo obrigatório'
                     : null,
               ),
-              const SizedBox(height: 16),
-              // — Grupo muscular —
-              Theme(
-                data: Theme.of(context).copyWith(
-                  canvasColor: const Color(0xFF1E1E1E),
-                ),
-                child: DropdownButtonFormField<String>(
-                  value: _grupoSelecionado,
-                  style: const TextStyle(color: Colors.white),
-                  iconEnabledColor: Colors.orange,
-                  decoration: InputDecoration(
-                    hintText: 'Grupo Muscular',
-                    hintStyle: const TextStyle(color: Colors.white70),
-                    filled: true,
-                    fillColor: const Color(0xFF1E1E1E),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
+              const SizedBox(height: 24),
+              // Grupo Muscular (custom)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Grupo Muscular',
+                    style: TextStyle(color: AppColors.onSurfaceLight),
+                  ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: _abrirSelecaoGrupo,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _grupoSelecionado == null
+                              ? AppColors.onSurfaceLight.withOpacity(0.4)
+                              : AppColors.accent,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _grupoSelecionado ?? 'Selecione um grupo',
+                              style: TextStyle(
+                                color: _grupoSelecionado == null
+                                    ? AppColors.onSurfaceLight
+                                    : AppColors.onSurface,
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.arrow_drop_down,
+                            color: AppColors.onSurfaceLight,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  items: _gruposMusculares
-                      .map((g) => DropdownMenuItem(
-                    value: g,
-                    child: Text(g,
-                        style: const TextStyle(color: Colors.white)),
-                  ))
-                      .toList(),
-                  onChanged: (v) => setState(() => _grupoSelecionado = v),
-                  validator: (v) =>
-                  v == null ? 'Selecione um grupo' : null,
-                ),
+                  if (_erroGrupo)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Selecione um grupo',
+                        style: TextStyle(
+                          color: AppColors.error,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(height: 32),
-              // — Botão Salvar —
+              const SizedBox(height: 40),
               ElevatedButton(
-                onPressed: _salvarExercicio,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B00),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: const Text(
-                  'Salvar Exercício',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                onPressed: _isNomeValido ? _salvar : null,
+                child: const Text('Salvar Exercício'),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShimmer() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Shimmer.fromColors(
+        baseColor: AppColors.surface,
+        highlightColor: AppColors.primary,
+        child: ListView(
+          children: [
+            // placeholder do campo de nome
+            Container(height: 48, margin: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12))),
+            // placeholder do dropdown
+            Container(height: 48, margin: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12))),
+            const SizedBox(height: 24),
+            // placeholder do botão
+            Container(height: 48, margin: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12))),
+          ],
         ),
       ),
     );

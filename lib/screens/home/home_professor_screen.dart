@@ -1,15 +1,20 @@
+// lib/screens/home/home_professor_screen.dart
+
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
+
+import '../../app_theme.dart';
 import '../../services/api_service.dart';
 import '../../services/treino_destaque_service.dart';
 import '../aluno/lista_alunos_professor_screen.dart';
-import '../treino/editar_treino_screen.dart';
 import '../professor/cadastrar_exercicio_screen.dart';
+import '../treino/editar_treino_screen.dart';
 
 class HomeProfessorScreen extends StatefulWidget {
-  const HomeProfessorScreen({super.key});
+  const HomeProfessorScreen({Key? key}) : super(key: key);
 
   @override
   State<HomeProfessorScreen> createState() => _HomeProfessorScreenState();
@@ -17,22 +22,21 @@ class HomeProfessorScreen extends StatefulWidget {
 
 class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
   final _storage = const FlutterSecureStorage();
-  late PageController _pageController;
+  late final PageController _pageController;
   bool _loading = true;
   int _selectedIndex = 0;
-  String nomeProfessor = '';
+  String _nomeProfessor = '';
   List<Map<String, dynamic>> _alunosComTreinos = [];
   Map<String, bool> _checkboxStatus = {};
 
   static const double _itemWidth = 100;
-  static const double _spacing = 24;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    _loadAll();
     _loadNomeProfessor();
+    _loadAll();
   }
 
   @override
@@ -43,9 +47,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
 
   Future<void> _loadNomeProfessor() async {
     final nome = await _storage.read(key: 'nome');
-    setState(() {
-      nomeProfessor = nome ?? '';
-    });
+    setState(() => _nomeProfessor = nome ?? '');
   }
 
   Future<void> _loadAll() async {
@@ -57,19 +59,14 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     }
 
     final salvos = await TreinoDestaqueService.getTreinosSalvos();
-    final List<Map<String, dynamic>> alunosList = [];
-
-    for (var item in salvos) {
+    final alunosList = salvos.map<Map<String, dynamic>>((item) {
       final aluno = item['aluno'] as Map<String, dynamic>;
-      final id = aluno['id'].toString();
-      final treinos = (item['treinos'] ?? []) as List;
-
-      alunosList.add({
-        'id': id,
+      return {
+        'id': aluno['id'].toString(),
         'nome': aluno['nome'],
-        'treinos': treinos,
-      });
-    }
+        'treinos': item['treinos'] as List<dynamic>,
+      };
+    }).toList();
 
     setState(() {
       _alunosComTreinos = alunosList;
@@ -78,21 +75,21 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     });
   }
 
-
   String _formatDate(String iso) {
     try {
-      final dt = DateTime.parse(iso);
-      return DateFormat('dd/MM/yyyy').format(dt);
+      return DateFormat('dd/MM/yyyy').format(DateTime.parse(iso));
     } catch (_) {
       return iso;
     }
   }
 
-  Future<void> _saveCheckbox() => _storage.write(
-      key: 'checkbox_status', value: jsonEncode(_checkboxStatus));
+  Future<void> _saveCheckbox() =>
+      _storage.write(key: 'checkbox_status', value: jsonEncode(_checkboxStatus));
 
   void _toggleCheckbox(String key, bool val) {
-    setState(() => _checkboxStatus[key] = val);
+    setState(() {
+      _checkboxStatus[key] = val;
+    });
     _saveCheckbox();
   }
 
@@ -101,24 +98,26 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     final action = isFinish ? 'finalizar' : 'cancelar';
     final confirmed = await showDialog<bool>(
       context: ctx,
-      builder: (dctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surface,
         title: Text(
           isFinish ? 'Finalizar Treino' : 'Cancelar Treino',
-          style: const TextStyle(color: Colors.orange),
+          style: AppTextStyles.titleMedium.copyWith(color: AppColors.accent),
         ),
         content: Text(
           'Deseja realmente $action este treino?',
-          style: const TextStyle(color: Colors.white70),
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceLight),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dctx, false),
-            child: const Text('Não', style: TextStyle(color: Colors.white70)),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Não',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceLight)),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dctx, true),
-            child: const Text('Sim', style: TextStyle(color: Colors.orange)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Sim',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.accent)),
           ),
         ],
       ),
@@ -126,13 +125,14 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     if (confirmed != true) return false;
 
     if (isFinish) {
-      final alunoItem = _alunosComTreinos.firstWhere((a) => a['id'] == alunoId);
-      final treino = alunoItem['treinos'].last as Map<String, dynamic>;
+      final alunoItem =
+      _alunosComTreinos.firstWhere((a) => a['id'] == alunoId);
+      final treino = (alunoItem['treinos'] as List).last as Map<String, dynamic>;
       final raw = treino['treinoId'] ?? treino['id'] ?? treino['treino_id'];
       final int? id = raw is int ? raw : int.tryParse(raw.toString());
       if (id != null) {
         final hoje = DateTime.now().toIso8601String().substring(0, 10);
-        await ApiService.finalizarTreino(
+        await ApiService.finalizarTreinoViaWebsocket(
           treinoId: id,
           alunoId: int.parse(alunoId),
           dataRealizacao: hoje,
@@ -141,6 +141,7 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     }
 
     await TreinoDestaqueService.removerTreinoPorId(alunoId);
+
     setState(() {
       _alunosComTreinos.removeWhere((a) => a['id'] == alunoId);
       _selectedIndex = _alunosComTreinos.isEmpty
@@ -151,13 +152,17 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
 
     ScaffoldMessenger.of(ctx).showSnackBar(
       SnackBar(
-        content: Text(
-          isFinish
-              ? 'Treino finalizado e removido.'
-              : 'Treino cancelado e removido.',
+        content: Text(isFinish
+            ? 'Treino finalizado e removido.'
+            : 'Treino cancelado e removido.'),
+        action: SnackBarAction(
+          label: 'Desfazer',
+          textColor: AppColors.accent,
+          onPressed: () => _loadAll(),
         ),
       ),
     );
+
     return false;
   }
 
@@ -171,26 +176,29 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     final hasData = !_loading && _alunosComTreinos.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(backgroundColor: const Color(0xFF121212),
+      backgroundColor: AppColors.primary,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: AppColors.onSurface),
       ),
       drawer: _buildDrawer(),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+          ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
           : hasData
           ? PageView.builder(
         controller: _pageController,
         itemCount: _alunosComTreinos.length,
         onPageChanged: (i) => setState(() => _selectedIndex = i),
-        itemBuilder: (_, i) => _buildTreinosAluno(_alunosComTreinos[i]),
+        itemBuilder: (_, i) =>
+            _buildTreinosAluno(_alunosComTreinos[i]),
       )
           : Center(
         child: Text(
-          'Bem-vindo, $nomeProfessor 👋',
+          'Bem-vindo, $_nomeProfessor 👋',
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white70, fontSize: 18),
+          style: AppTextStyles.bodyMedium
+              .copyWith(color: AppColors.onSurfaceLight),
         ),
       ),
       bottomNavigationBar:
@@ -198,109 +206,132 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
     );
   }
 
-  Widget _buildDrawer() => Drawer(
-    backgroundColor: const Color(0xFF121212),
-    child: ListView(
-      children: [
-        const DrawerHeader(
-          decoration: BoxDecoration(color: Color(0xFF121212)),
-          child: Text('Menu do Professor',
-              style: TextStyle(color: Colors.white, fontSize: 20)),
+  Widget _buildDrawer() {
+    return Drawer(
+      backgroundColor: AppColors.primary,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              color: AppColors.surface,
+              child: Text(
+                'Menu do Professor',
+                style:
+                AppTextStyles.titleLarge.copyWith(color: AppColors.accent),
+              ),
+            ),
+            const Divider(color: AppColors.accent, height: 1),
+            _drawerItem(
+              icon: Icons.people,
+              label: 'Lista de Alunos',
+              onTap: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ListaAlunosProfessorScreen()),
+              ),
+            ),
+            _drawerItem(
+              icon: Icons.fitness_center,
+              label: 'Cadastrar Exercício',
+              onTap: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const CadastrarExercicioScreen()),
+              ),
+            ),
+            const Spacer(),
+            const Divider(color: AppColors.accent, height: 1),
+            _drawerItem(
+              icon: Icons.logout,
+              label: 'Sair',
+              iconColor: AppColors.error,
+              textColor: AppColors.error,
+              onTap: _logout,
+            ),
+          ],
         ),
-        ListTile(
-          leading: const Icon(Icons.people, color: Colors.white),
-          title: const Text('Lista de Alunos',
-              style: TextStyle(color: Colors.white)),
-          onTap: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (_) => const ListaAlunosProfessorScreen()),
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.fitness_center, color: Colors.white),
-          title: const Text('Cadastrar Exercício',
-              style: TextStyle(color: Colors.white)),
-          onTap: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (_) => const CadastrarExercicioScreen()),
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.logout, color: Colors.white),
-          title: const Text('Sair', style: TextStyle(color: Colors.white)),
-          onTap: _logout,
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
+
+  ListTile _drawerItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color iconColor = AppColors.onSurface,
+    Color textColor = AppColors.onSurface,
+  }) =>
+      ListTile(
+        leading: Icon(icon, color: iconColor),
+        title: Text(label,
+            style: AppTextStyles.bodyMedium.copyWith(color: textColor)),
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+        horizontalTitleGap: 16,
+      );
 
   Widget _buildBottomNav() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const int maxVisibleItems = 5;
-        final bool isScrollable = _alunosComTreinos.length > maxVisibleItems;
-        final double totalWidth = constraints.maxWidth;
-        final double itemWidth = isScrollable
-            ? _itemWidth
-            : (totalWidth / _alunosComTreinos.length).clamp(80, _itemWidth);
-
-        return Container(
-          color: const Color(0xFF1E1E1E),
-          height: 60,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _alunosComTreinos.length,
-            itemBuilder: (_, i) {
-              final aluno = _alunosComTreinos[i];
-              final isSel = i == _selectedIndex;
-              return GestureDetector(
-                onTap: () {
-                  setState(() => _selectedIndex = i);
-                  _pageController.jumpToPage(i);
-                },
-                child: SizedBox(
-                  width: itemWidth,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        height: 3,
-                        width: 60,
-                        color: isSel ? Colors.orange : Colors.transparent,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        aluno['nome'].toString().split(' ').first,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: isSel ? Colors.white : Colors.white54,
-                          fontWeight:
-                          isSel ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
+    return Container(
+      color: AppColors.surface,
+      height: 60,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _alunosComTreinos.length,
+        itemBuilder: (_, i) {
+          final aluno = _alunosComTreinos[i];
+          final isSel = i == _selectedIndex;
+          final nome = aluno['nome'].toString().split(' ').first;
+          return GestureDetector(
+            onTap: () {
+              setState(() => _selectedIndex = i);
+              _pageController.jumpToPage(i);
             },
-          ),
-        );
-      },
+            child: Container(
+              width: (_alunosComTreinos.length > 5)
+                  ? _itemWidth
+                  : MediaQuery.of(context).size.width /
+                  _alunosComTreinos.length,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    height: 3,
+                    width: 60,
+                    color: isSel ? AppColors.accent : Colors.transparent,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    nome,
+                    style: TextStyle(
+                      color: isSel
+                          ? AppColors.onSurface
+                          : AppColors.onSurfaceLight,
+                      fontWeight:
+                      isSel ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
   Widget _buildTreinosAluno(Map<String, dynamic> alunoData) {
     final id = alunoData['id'] as String;
-    final treinos = alunoData['treinos'] as List<dynamic>;
+    final treinos = (alunoData['treinos'] ?? []) as List<dynamic>;
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: treinos.length,
       itemBuilder: (_, idx) {
         final treino = treinos[idx] as Map<String, dynamic>;
-        final exs = treino['exercicios'] as List<dynamic>;
+        final exs = (treino['exercicios'] ?? []) as List<dynamic>;
         final total = exs.length;
         final done = exs.asMap().entries.where((e) {
           final key = '$id-${treino['id'] ?? treino['treinoId']}-${e.key}';
@@ -322,32 +353,32 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: const Icon(Icons.cancel, color: Colors.white),
           ),
-          confirmDismiss: (direction) {
-            final isFinish = direction == DismissDirection.startToEnd;
-            return _handleDismiss(context, id, isFinish);
-          },
+          confirmDismiss: (dir) =>
+              _handleDismiss(context, id, dir == DismissDirection.startToEnd),
           child: Card(
-            color: const Color(0xFF1E1E1E),
+            color: AppColors.surface,
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             margin: const EdgeInsets.symmetric(vertical: 8),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // título + editar
                   Row(
                     children: [
                       Expanded(
                         child: Text(
                           treino['descricao'] ?? 'Sem título',
-                          style: const TextStyle(
-                            color: Colors.orange,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: AppTextStyles.titleMedium
+                              .copyWith(color: AppColors.accent, fontSize: 20),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.white70),
+                        icon: const Icon(Icons.edit,
+                            color: AppColors.onSurfaceLight),
+                        tooltip: 'Editar treino',
                         onPressed: () async {
                           final idTreino =
                               treino['id'] ?? treino['treinoId'];
@@ -366,38 +397,69 @@ class _HomeProfessorScreenState extends State<HomeProfessorScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: prog,
-                    color: Colors.orange,
-                    backgroundColor: const Color(0xFF2C2C2C),
-                  ),
-                  const SizedBox(height: 8),
+
+                  const SizedBox(height: 4),
                   Text(
-                    'Data: ${_formatDate(treino['data'] ?? '')}',
-                    style: const TextStyle(color: Colors.white70),
+                    _formatDate(treino['data'] ?? ''),
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: AppColors.onSurfaceLight),
                   ),
-                  const Divider(color: Colors.orange),
-                  ...exs.asMap().entries.map((e) {
-                    final ex = e.value as Map<String, dynamic>;
-                    final key =
-                        '$id-${treino['id'] ?? treino['treinoId']}-${e.key}';
-                    final ck = _checkboxStatus[key] ?? false;
-                    return CheckboxListTile(
-                      value: ck,
-                      onChanged: (v) =>
-                          _toggleCheckbox(key, v ?? false),
-                      activeColor: Colors.orange,
-                      checkColor: Colors.black,
-                      title: Text(
-                        '${ex['nomeExercicio']} ${ex['series']}x'
-                            '${ex['repeticoes']} - ${ex['carga'] ?? '0'}kg '
-                            '${ex['observacao'] ?? ''}',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      controlAffinity: ListTileControlAffinity.leading,
-                    );
-                  }).toList(),
+                  const SizedBox(height: 12),
+
+                  // progresso
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: prog,
+                      minHeight: 8,
+                      color: AppColors.accent,
+                      backgroundColor: AppColors.surface,
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // exercícios
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: exs.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, j) {
+                      final ex = exs[j] as Map<String, dynamic>;
+                      final key =
+                          '$id-${treino['id'] ?? treino['treinoId']}-$j';
+                      final ck = _checkboxStatus[key] ?? false;
+
+                      final nomeEx = ex['nomeExercicio'] ??
+                          ex['nome'] ??
+                          '<sem nome>';
+                      final series = ex['series']?.toString() ?? '';
+                      final reps = ex['repeticoes']?.toString() ?? '';
+                      final carga = ex['carga']?.toString() ?? '0';
+                      final obs = ex['observacao'] ?? '';
+
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => _toggleCheckbox(key, !ck),
+                        child: CheckboxListTile(
+                          value: ck,
+                          onChanged: (v) => _toggleCheckbox(key, v!),
+                          activeColor: AppColors.accent,
+                          checkColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            '$nomeEx ${series}x$reps – ${carga}kg $obs',
+                            style: AppTextStyles.bodyMedium,
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),

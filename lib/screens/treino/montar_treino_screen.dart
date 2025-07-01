@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:intl/intl.dart';
+
 import '../../models/aluno.dart';
 import '../../services/api_service.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../services/treino_destaque_service.dart';
+import '../treino/editar_treino_screen.dart';
+import '../treino/montar_treino_professor_screen.dart';
+import '../home/home_professor_screen.dart';
+import '../../app_theme.dart';
 
 class MontarTreinoScreen extends StatefulWidget {
   final Aluno aluno;
-
   const MontarTreinoScreen({super.key, required this.aluno});
 
   @override
@@ -13,13 +19,9 @@ class MontarTreinoScreen extends StatefulWidget {
 }
 
 class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  Map<String, List<dynamic>> _exerciciosPorGrupo = {};
-  List<Map<String, dynamic>> _exerciciosSelecionados = [];
+  final _storage = const FlutterSecureStorage();
   List<dynamic> _treinosAnteriores = [];
   bool _loading = true;
-  bool _criandoNovo = false;
-  final TextEditingController _nomeTreinoController = TextEditingController();
 
   @override
   void initState() {
@@ -28,217 +30,207 @@ class _MontarTreinoScreenState extends State<MontarTreinoScreen> {
   }
 
   Future<void> _carregarDados() async {
+    setState(() => _loading = true);
     try {
-      final exercicios = await ApiService.getExerciciosAgrupados();
       final treinos = await ApiService.listarTreinosPorAluno(widget.aluno.id);
       setState(() {
-        _exerciciosPorGrupo = exercicios;
         _treinosAnteriores = treinos ?? [];
-        _loading = false;
       });
     } catch (e) {
-      print('Erro ao carregar dados: $e');
+      debugPrint('Erro ao carregar treinos: $e');
+    } finally {
       setState(() => _loading = false);
     }
   }
 
-  void _salvarTreino() async {
+  String _formatDate(String iso) {
     try {
-      final cpfProfessor = await _storage.read(key: 'cpf');
-      final nomeTreino = _nomeTreinoController.text.trim();
-
-      if (nomeTreino.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Digite o nome do treino.')),
-        );
-        return;
-      }
-
-      final treino = {
-        'descricao': nomeTreino,
-        'alunoCpf': widget.aluno.id,
-        'personalCpf': cpfProfessor,
-        'data': DateTime.now().toIso8601String(),
-        'exercicios': _exerciciosSelecionados
-      };
-
-      await ApiService.salvarTreinoDetalhado(treino);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Treino salvo com sucesso!')),
-      );
-      Navigator.pop(context);
-    } catch (e) {
-      print('Erro ao salvar treino: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao salvar treino: $e')),
-      );
+      return DateFormat('dd/MM/yyyy').format(DateTime.parse(iso));
+    } catch (_) {
+      return iso;
     }
-  }
-
-  Widget _buildCamposExtras(Map<String, dynamic> exercicio) {
-    return Column(
-      children: [
-        TextField(
-          decoration: const InputDecoration(labelText: 'Ordem', filled: true),
-          keyboardType: TextInputType.number,
-          onChanged: (val) => exercicio['ordem'] = int.tryParse(val),
-        ),
-        TextField(
-          decoration: const InputDecoration(labelText: 'Séries', filled: true),
-          keyboardType: TextInputType.number,
-          onChanged: (val) => exercicio['series'] = int.tryParse(val),
-        ),
-        TextField(
-          decoration: const InputDecoration(labelText: 'Repetições', filled: true),
-          keyboardType: TextInputType.number,
-          onChanged: (val) => exercicio['repeticoes'] = int.tryParse(val),
-        ),
-        TextField(
-          decoration: const InputDecoration(labelText: 'Observação', filled: true),
-          onChanged: (val) => exercicio['observacao'] = val,
-        ),
-        const SizedBox(height: 10),
-      ],
-    );
-  }
-
-  Widget _buildFormularioNovoTreino() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: TextField(
-            controller: _nomeTreinoController,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              labelText: 'Nome do Treino',
-              labelStyle: TextStyle(color: Colors.white),
-              filled: true,
-              fillColor: Colors.black12,
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        ..._exerciciosPorGrupo.entries.map((entry) {
-          final grupo = entry.key;
-          final exercicios = entry.value;
-
-          return ExpansionTile(
-            title: Text(grupo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            iconColor: Colors.orange,
-            collapsedIconColor: Colors.orange,
-            children: exercicios.map((exercicio) {
-              final id = exercicio['id'];
-              final nome = exercicio['nome'];
-              final index = _exerciciosSelecionados.indexWhere((e) => e['exercicioId'] == id);
-              final selecionado = index != -1;
-
-              return Column(
-                children: [
-                  CheckboxListTile(
-                    title: Text(nome, style: const TextStyle(color: Colors.white)),
-                    value: selecionado,
-                    activeColor: Colors.orange,
-                    onChanged: (bool? selected) {
-                      setState(() {
-                        if (selected == true) {
-                          _exerciciosSelecionados.add({
-                            'exercicioId': id,
-                            'ordem': 1,
-                            'series': 3,
-                            'repeticoes': 10,
-                            'observacao': ''
-                          });
-                        } else {
-                          _exerciciosSelecionados.removeWhere((e) => e['exercicioId'] == id);
-                        }
-                      });
-                    },
-                  ),
-                  if (selecionado)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: _buildCamposExtras(_exerciciosSelecionados[index]),
-                    ),
-                ],
-              );
-            }).toList(),
-          );
-        }).toList(),
-        const SizedBox(height: 80),
-      ],
-    );
-  }
-
-  @override
-  void dispose() {
-    _nomeTreinoController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: AppColors.primary,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
-        title: Text('Treino de ${widget.aluno.nome}'),
-        backgroundColor: const Color(0xFFFF6B00),
+        title: Text('Treinos de ${widget.aluno.nome}'),
+        backgroundColor: AppColors.accent,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Colors.orange))
-          : !_criandoNovo
-          ? (_treinosAnteriores.isNotEmpty
-          ? Column(
-        children: [
-          const SizedBox(height: 16),
-          ..._treinosAnteriores.map((t) => ListTile(
-            title: Text(t['descricao'], style: const TextStyle(color: Colors.white)),
-            subtitle: Text(t['data'], style: const TextStyle(color: Colors.white70)),
-            trailing: IconButton(
-              icon: const Icon(Icons.add, color: Colors.orange),
-              onPressed: () async {
-                final treinoId = t['treino_id'] ?? t['id']; // depende de como o backend retorna
-                try {
-                  final detalhes = await ApiService.getTreinoDetalhado(treinoId);
-                  print('Treino detalhado (ID: $treinoId): $detalhes');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Treino detalhado impresso no console.')),
-                  );
-                } catch (e) {
-                  print('Erro ao buscar treino detalhado: $e');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Erro ao buscar detalhes do treino.')),
-                  );
-                }
-              },
+          : RefreshIndicator(
+        onRefresh: _carregarDados,
+        child: _treinosAnteriores.isEmpty
+            ? ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 200),
+            Center(
+              child: Text(
+                'Nenhum treino encontrado.',
+                style: TextStyle(color: AppColors.onSurfaceLight),
+              ),
             ),
+          ],
+        )
+            : ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: _treinosAnteriores.length,
+          itemBuilder: (_, i) {
+            final t = _treinosAnteriores[i] as Map<String, dynamic>;
+            final treinoId = t['treino_id'] ?? t['id'];
+            final dataStr = t['data'] ?? '';
+            final dt = DateTime.tryParse(dataStr) ?? DateTime(0);
+            final vencido = DateTime.now().difference(dt).inDays > 40;
 
-          )),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () => setState(() => _criandoNovo = true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Criar novo treino'),
-          )
-        ],
-      )
-          : ListView(children: [_buildFormularioNovoTreino()]))
-          : ListView(children: [_buildFormularioNovoTreino()]),
-      floatingActionButton: _criandoNovo
-          ? FloatingActionButton.extended(
-        onPressed: _salvarTreino,
-        backgroundColor: const Color(0xFFFF6B00),
-        label: const Text("Salvar Treino"),
-        icon: const Icon(Icons.save),
-      )
-          : null,
+            return Card(
+              color: theme.colorScheme.surface,
+              margin: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 4),
+              child: ListTile(
+                tileColor: vencido
+                    ? Colors.redAccent.withOpacity(0.2)
+                    : null,
+                title: Text(
+                  t['descricao'] ?? 'Sem descrição',
+                  style: TextStyle(
+                    color: vencido
+                        ? Colors.redAccent
+                        : theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  _formatDate(dataStr),
+                  style: TextStyle(
+                    color: vencido
+                        ? Colors.redAccent
+                        : AppColors.onSurfaceLight,
+                  ),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Editar Treino
+                    IconButton(
+                      icon: const Icon(Icons.edit,
+                          color: AppColors.onSurfaceLight),
+                      onPressed: () async {
+                        final ok = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => EditarTreinoScreen(
+                              treinoId: treinoId,
+                              alunoId: widget.aluno.id,
+                              alunoNome: widget.aluno.nome,
+                            ),
+                          ),
+                        );
+                        if (ok == true) _carregarDados();
+                      },
+                    ),
+                    // Excluir Treino
+                    IconButton(
+                      icon: const Icon(Icons.delete,
+                          color: AppColors.error),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor:
+                            AppColors.surface,
+                            title: const Text(
+                              'Excluir treino?',
+                              style: TextStyle(
+                                  color:
+                                  AppColors.onSurface),
+                            ),
+                            content: const Text(
+                              'Deseja realmente excluir este treino?',
+                              style: TextStyle(
+                                  color: AppColors
+                                      .onSurfaceLight),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(ctx, false),
+                                child: const Text('Não',
+                                    style: TextStyle(
+                                        color: AppColors
+                                            .onSurfaceLight)),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(ctx, true),
+                                child: const Text('Sim',
+                                    style: TextStyle(
+                                        color: AppColors
+                                            .accent)),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await ApiService.excluirTreino(
+                              treinoId);
+                          _carregarDados();
+                        }
+                      },
+                    ),
+                    // Enviar Treino para HomeProfessor
+                    IconButton(
+                      icon: const Icon(Icons.arrow_forward,
+                          color: AppColors.accent),
+                      onPressed: () async {
+                        final detalhe = await ApiService
+                            .getTreinoDetalhado(treinoId);
+                        await TreinoDestaqueService
+                            .adicionarTreinoCompleto({
+                          'aluno': {
+                            'id': widget.aluno.id,
+                            'nome': widget.aluno.nome,
+                          },
+                          'treinos': [detalhe],
+                        });
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                              const HomeProfessorScreen()),
+                              (route) => false,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.accent,
+        icon: const Icon(Icons.add),
+        label: const Text('Criar novo treino'),
+        onPressed: () async {
+          // Navega para a tela de montagem completa:
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  MontarTreinoProfessorScreen(aluno: widget.aluno),
+            ),
+          );
+          // Ao voltar, recarrega a lista
+          _carregarDados();
+        },
+      ),
     );
   }
-
 }

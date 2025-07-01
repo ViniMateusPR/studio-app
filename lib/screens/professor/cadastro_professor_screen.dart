@@ -1,8 +1,7 @@
 // lib/screens/professor/cadastro_professor_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../../app_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 
@@ -15,6 +14,7 @@ class CadastroProfessorScreen extends StatefulWidget {
 }
 
 class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _nomeController = TextEditingController();
   final _cpfController = TextEditingController();
   final _emailController = TextEditingController();
@@ -23,21 +23,10 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
   bool _isLoading = false;
   String? _mensagem;
   bool _erro = false;
-  bool _showSenha = false; // controla visibilidade da senha
+  bool _showSenha = false;
 
   Future<void> _cadastrarProfessor() async {
-    final nome = _nomeController.text.trim();
-    final cpf = _cpfController.text.trim();
-    final email = _emailController.text.trim();
-    final senha = _senhaController.text;
-
-    if (nome.isEmpty || cpf.isEmpty || email.isEmpty || senha.isEmpty) {
-      setState(() {
-        _erro = true;
-        _mensagem = 'Preencha todos os campos.';
-      });
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isLoading = true;
@@ -46,43 +35,33 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
 
     try {
       final empresaId = await AuthService().getEmpresaId();
-      final token = await AuthService().getToken();
-      final url = Uri.parse(
-          '${ApiService.baseUrl}/professores/cadastrarProfessor');
+      final cpfProfessor = await AuthService().getCpfLogado();
+      // monta o body do POST
+      final body = {
+        'nome': _nomeController.text.trim(),
+        'cpf': _cpfController.text.trim(),
+        'email': _emailController.text.trim(),
+        'senha': _senhaController.text,
+        'empresaId': int.parse(empresaId!),
+      };
 
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'nome': nome,
-          'cpf': cpf,
-          'email': email,
-          'senha': senha,
-          'empresaId': int.parse(empresaId!),
-        }),
+      // usa o método genérico post do ApiService
+      await ApiService.post(
+        '/professores/cadastrarProfessor',
+        body: body,
       );
 
-      if (response.statusCode == 201) {
-        setState(() {
-          _erro = false;
-          _mensagem = 'Professor cadastrado com sucesso!';
-        });
-        Future.delayed(const Duration(seconds: 2), () {
-          Navigator.pop(context);
-        });
-      } else {
-        setState(() {
-          _erro = true;
-          _mensagem = 'Erro ao cadastrar professor.';
-        });
-      }
+      setState(() {
+        _erro = false;
+        _mensagem = 'Professor cadastrado com sucesso!';
+      });
+
+      await Future.delayed(const Duration(seconds: 1));
+      Navigator.pop(context, true);
     } catch (e) {
       setState(() {
         _erro = true;
-        _mensagem = 'Erro de conexão ou formato inválido';
+        _mensagem = 'Falha ao cadastrar: $e';
       });
     } finally {
       setState(() => _isLoading = false);
@@ -101,98 +80,113 @@ class _CadastroProfessorScreenState extends State<CadastroProfessorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: AppColors.primary,
       appBar: AppBar(
-        title: const Text("Cadastrar Professor"),
-        backgroundColor: const Color(0xFF1E1E1E),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        leading: const BackButton(color: AppColors.onSurface),
+        title: const Text('Cadastrar Professor'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildTextField(_nomeController, 'Nome'),
-            _buildTextField(_cpfController, 'CPF',
-                keyboardType: TextInputType.number),
-            _buildTextField(_emailController, 'Email',
-                keyboardType: TextInputType.emailAddress),
-            _buildTextField(
-              _senhaController,
-              'Senha',
-              obscure: !_showSenha,
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _showSenha ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.white70,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Nome
+                TextFormField(
+                  controller: _nomeController,
+                  style: AppTextStyles.bodyMedium,
+                  decoration: const InputDecoration(labelText: 'Nome'),
+                  validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Nome obrigatório' : null,
                 ),
-                onPressed: () =>
-                    setState(() => _showSenha = !_showSenha),
-              ),
-            ),
-            const SizedBox(height: 24),
-            _isLoading
-                ? const Center(
-                child:
-                CircularProgressIndicator(color: Colors.orange))
-                : ElevatedButton(
-              onPressed: _cadastrarProfessor,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B00),
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                "Cadastrar",
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-            if (_mensagem != null) ...[
-              const SizedBox(height: 20),
-              Text(
-                _mensagem!,
-                style: TextStyle(
-                  color: _erro ? Colors.redAccent : Colors.greenAccent,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+                const SizedBox(height: 16),
 
-  Widget _buildTextField(
-      TextEditingController controller,
-      String label, {
-        bool obscure = false,
-        TextInputType? keyboardType,
-        Widget? suffixIcon,
-      }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextField(
-        controller: controller,
-        obscureText: obscure,
-        keyboardType: keyboardType,
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          hintText: label,
-          hintStyle: const TextStyle(color: Colors.white70),
-          filled: true,
-          fillColor: const Color(0xFF1E1E1E),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
+                // CPF
+                TextFormField(
+                  controller: _cpfController,
+                  keyboardType: TextInputType.number,
+                  style: AppTextStyles.bodyMedium,
+                  decoration: const InputDecoration(labelText: 'CPF'),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'CPF obrigatório';
+                    if (v.trim().length < 11) return 'CPF incompleto';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Email
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  style: AppTextStyles.bodyMedium,
+                  decoration: const InputDecoration(labelText: 'E-mail'),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'E-mail obrigatório';
+                    final regex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                    if (!regex.hasMatch(v.trim())) return 'E-mail inválido';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Senha
+                TextFormField(
+                  controller: _senhaController,
+                  obscureText: !_showSenha,
+                  style: AppTextStyles.bodyMedium,
+                  decoration: InputDecoration(
+                    labelText: 'Senha',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _showSenha ? Icons.visibility_off : Icons.visibility,
+                        color: AppColors.onSurfaceLight,
+                      ),
+                      onPressed: () =>
+                          setState(() => _showSenha = !_showSenha),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Senha obrigatória';
+                    if (v.length < 6) return 'Mínimo de 6 caracteres';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 32),
+
+                // Botão
+                SizedBox(
+                  width: double.infinity,
+                  child: _isLoading
+                      ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.accent,
+                    ),
+                  )
+                      : ElevatedButton(
+                    onPressed: _cadastrarProfessor,
+                    child: const Text('Cadastrar'),
+                  ),
+                ),
+
+                // Mensagem de retorno
+                if (_mensagem != null) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    _mensagem!,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: _erro ? AppColors.error : AppColors.accent,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
           ),
-          suffixIcon: suffixIcon,
         ),
       ),
     );

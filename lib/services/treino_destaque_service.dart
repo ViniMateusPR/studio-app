@@ -4,54 +4,45 @@ import 'dart:convert';
 class TreinoDestaqueService {
   static const _storage = FlutterSecureStorage();
   static const _key = 'treinos_destaque';
+
+  /// Expõe a chave do storage para outros serviços
   static String get storageKey => _key;
 
   static Future<List<Map<String, dynamic>>> getTreinosSalvos() async {
     final jsonString = await _storage.read(key: _key);
     if (jsonString == null) return [];
-    final List decoded = jsonDecode(jsonString);
+    final decoded = jsonDecode(jsonString) as List;
     return decoded.cast<Map<String, dynamic>>();
   }
 
   static Future<void> adicionarTreinoCompleto(Map<String, dynamic> data) async {
-    final treinosSalvos = await getTreinosSalvos();
-
+    final salvos = await getTreinosSalvos();
     final aluno = data['aluno'] as Map<String, dynamic>;
-    final treino = Map<String, dynamic>.from(data['treino']);
-
+    final treinos = List<Map<String, dynamic>>.from(data['treinos'] as List);
     final alunoId = aluno['id'].toString();
 
-    // 🔥 Verifica e adiciona data de realização, se não existir
-    treino['dataRealizacao'] = treino['dataRealizacao'] ?? DateTime.now().toIso8601String();
+    final idx = salvos.indexWhere((item) =>
+    (item['aluno'] as Map<String, dynamic>)['id'].toString() == alunoId
+    );
 
-    // Verifica se já existe esse aluno na lista
-    final index = treinosSalvos.indexWhere((item) {
-      final a = item['aluno'] as Map<String, dynamic>;
-      return a['id'].toString() == alunoId;
-    });
-
-    if (index != -1) {
-      // Já existe -> adiciona treino
-      treinosSalvos[index]['treinos'].add(treino);
+    if (idx != -1) {
+      salvos[idx]['treinos'] = treinos; // sobrescreve
     } else {
-      // Não existe -> cria novo
-      treinosSalvos.add({
-        'aluno': {
-          'id': alunoId,
-          'nome': aluno['nome'],
-        },
-        'treinos': [treino],
+      salvos.add({
+        'aluno': { 'id': alunoId, 'nome': aluno['nome'] },
+        'treinos': treinos,
       });
     }
 
-    await _storage.write(key: _key, value: jsonEncode(treinosSalvos));
+    await _storage.write(key: _key, value: jsonEncode(salvos));
   }
 
-
   static Future<void> removerTreinoPorId(String alunoId) async {
-    final treinos = await getTreinosSalvos();
-    treinos.removeWhere((t) => t['aluno']['id'].toString() == alunoId);
-    await _storage.write(key: _key, value: jsonEncode(treinos));
+    final salvos = await getTreinosSalvos();
+    salvos.removeWhere((t) =>
+    (t['aluno'] as Map<String, dynamic>)['id'].toString() == alunoId
+    );
+    await _storage.write(key: _key, value: jsonEncode(salvos));
   }
 
   static Future<void> limparTodosTreinos() async {

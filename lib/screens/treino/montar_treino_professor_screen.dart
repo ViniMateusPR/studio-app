@@ -1,13 +1,22 @@
+// lib/screens/treino/montar_treino_professor_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+
+import '../../app_theme.dart';
 import '../../models/aluno.dart';
+import '../../providers/montar_treino_provider.dart';
+import '../../screens/treino/criar_ficha_screen.dart';
+import '../../screens/treino/editar_ficha_screen.dart';
+import '../../screens/treino/editar_treino_screen.dart';
+import '../../screens/home/home_professor_screen.dart';
 import '../../services/api_service.dart';
 import '../../services/treino_destaque_service.dart';
-import '../home/home_professor_screen.dart';
-import '../treino/editar_treino_screen.dart';
+import '../../widgets/exercicio_tile.dart';
 
 class MontarTreinoProfessorScreen extends StatefulWidget {
+  static const routeName = '/montar-treino';
   final Aluno aluno;
   const MontarTreinoProfessorScreen({super.key, required this.aluno});
 
@@ -19,532 +28,494 @@ class MontarTreinoProfessorScreen extends StatefulWidget {
 class _MontarTreinoProfessorScreenState
     extends State<MontarTreinoProfessorScreen>
     with SingleTickerProviderStateMixin {
-  final _storage = const FlutterSecureStorage();
-  late TabController _tabController;
-
-  bool _loading = true;
-  Map<String, List<dynamic>> _exerciciosPorGrupo = {};
-  List<Map<String, dynamic>> _exerciciosSelecionados = [];
-  List<dynamic> _treinosAnteriores = [];
-  Map<String, dynamic>? _ultimoTreino;
-  final TextEditingController _nomeTreinoController = TextEditingController();
+  late final TabController _tabController;
+  bool _injected = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _nomeTreinoController.addListener(() => setState(() {})); //<-- Aqui
-    _carregarDados();
-    _tabController.addListener(() => setState(() {}));
+    _tabController = TabController(length: 2, vsync: this)
+      ..addListener(() => setState(() {}));
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_injected) {
+      final prov = context.read<MontarTreinoProvider>();
+      prov.alunoId = widget.aluno.id;
+      // chama a carga de dados após terminar o build da frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        prov.carregarDados();
+      });
+      _injected = true;
+    }
+  }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _nomeTreinoController.dispose();
     super.dispose();
   }
 
-  Future<void> _carregarDados() async {
-    setState(() => _loading = true);
-    try {
-      final exercicios = await ApiService.getExerciciosAgrupados();
-      final treinos = await ApiService.listarTreinosPorAluno(widget.aluno.id);
-      Map<String, dynamic>? ultimo;
-      if (widget.aluno.ultimoTreinoId != null) {
-        try {
-          ultimo = await ApiService.getTreinoDetalhado(
-            widget.aluno.ultimoTreinoId!,
-          );
-        } catch (_) {}
-      }
-      setState(() {
-        _exerciciosPorGrupo = exercicios;
-        _treinosAnteriores = treinos ?? [];
-        _ultimoTreino = ultimo;
-      });
-    } catch (e) {
-      debugPrint('Erro ao carregar dados: $e');
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _salvarTreino() async {
-    final nomeTreino = _nomeTreinoController.text.trim();
-    if (nomeTreino.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Digite o nome do treino.')));
-      return;
-    }
-    try {
-      final cpfProf = await _storage.read(key: 'cpf');
-      final body = {
-        'descricao': nomeTreino,
-        'alunoId': widget.aluno.id,
-        'personalCpf': cpfProf,
-        'data': DateTime.now().toIso8601String(),
-        'exercicios': _exerciciosSelecionados,
-      };
-      await ApiService.salvarTreinoDetalhado(body);
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Treino salvo com sucesso!')));
-      await _carregarDados();
-      _tabController.index = 0;
-    } catch (e) {
-      debugPrint('Erro ao salvar treino: $e');
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Erro ao salvar treino: $e')));
-    }
-  }
-
-  bool get _canSave =>
-      _nomeTreinoController.text.trim().isNotEmpty &&
-          _exerciciosSelecionados.isNotEmpty;
-
-  Future<bool> _confirmExcluir() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Excluir treino?',
-            style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Deseja realmente excluir este treino?',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Não', style: TextStyle(color: Colors.orange)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sim', style: TextStyle(color: Colors.orange)),
-          ),
-        ],
+  Future<void> _criarFicha() async {
+    final prov = context.read<MontarTreinoProvider>();
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CriarFichaScreen(aluno: widget.aluno),
       ),
     );
-    return ok == true;
+    if (created == true) {
+      prov.carregarDados();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final prov = context.watch<MontarTreinoProvider>();
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF121212),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context, false),
+        title: Text(
+          'Treino de ${widget.aluno.nome.split(' ').first}',
+          style: const TextStyle(color: Colors.white),
         ),
-        title: Text('Treino de ${widget.aluno.nome.split(' ').first}'),
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.orange,
-          tabs: const [Tab(text: 'Histórico'), Tab(text: 'Novo')],
+          indicatorColor: AppColors.accent,
+          tabs: const [
+            Tab(text: 'Histórico'),
+            Tab(text: 'Novo'),
+          ],
         ),
       ),
-      body: _loading
+      body: prov.loading
           ? const Center(
-          child: CircularProgressIndicator(color: Colors.orange))
+        child: CircularProgressIndicator(color: AppColors.accent),
+      )
           : TabBarView(
         controller: _tabController,
-        children: [_buildHistorico(), _buildNovoTreino()],
-      ),
-      floatingActionButton: _tabController.index == 1
-          ? FloatingActionButton.extended(
-        backgroundColor:
-        _canSave ? const Color(0xFFFF6B00) : Colors.grey,
-        icon: const Icon(Icons.save, color: Colors.white),
-        label: Text(
-          'Salvar (${_exerciciosSelecionados.length})',
-          style: const TextStyle(color: Colors.white),
-        ),
-        onPressed: _canSave ? _salvarTreino : null,
-      )
-          : null,
-    );
-  }
-
-  Widget _buildHistorico() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('Último Treino',
-              style: TextStyle(color: Colors.orange, fontSize: 18)),
-        ),
-        if (_treinosAnteriores.isNotEmpty)
-          PreviousWorkoutCard(
-            data: _treinosAnteriores.first,
-            mostrarAlteradoPor: false,
-            usarDataDeRealizacao: true,
-          ),
-        const Divider(color: Colors.orange, height: 32),
-        const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('Lista de Treinos',
-              style: TextStyle(color: Colors.orange, fontSize: 18)),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _treinosAnteriores.length,
-            itemBuilder: (_, i) {
-              final t = _treinosAnteriores[i] as Map<String, dynamic>;
-              return Dismissible(
-                key: ValueKey(t['id']),
-                background: Container(
-                  color: Colors.red,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: const Icon(Icons.delete, color: Colors.white),
-                ),
-                direction: DismissDirection.endToStart,
-                confirmDismiss: (_) => _confirmExcluir(),
-                onDismissed: (_) async {
-                  final id = t['id'];
-                  if (id != null) await ApiService.excluirTreino(id);
-                  setState(() => _treinosAnteriores.removeAt(i));
-                },
-                child: PreviousWorkoutCard(
-                  data: t,
-                  mostrarAlteradoPor: true,
-                  usarDataDeRealizacao: false,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.white70),
-                        onPressed: () async {
-                          final id = t['id'] as int?;
-                          final ok = await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EditarTreinoScreen(
-                                treinoId: id!,
-                                alunoId: widget.aluno.id,
-                                alunoNome: widget.aluno.nome,
-                              ),
-                            ),
-                          );
-                          if (ok == true) _carregarDados();
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add, color: Colors.orange),
-                        onPressed: () async {
-                          final detalhes = await ApiService.getTreinoDetalhado(
-                            t['treino_id'] ?? t['id'],
-                          );
-                          await TreinoDestaqueService.adicionarTreinoCompleto({
-                            'aluno': {
-                              'id': widget.aluno.id,
-                              'nome': widget.aluno.nome,
-                            },
-                            'treino': detalhes,
-                          });
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const HomeProfessorScreen()),
-                                (r) => false,
-                          );
-                        },
-                      ),
-                    ],
+        children: [
+          _HistoricoTab(
+            aluno: widget.aluno,
+            onCreateTreino: () {
+              prov.selectFicha(prov.fichaSelecionada!);
+              _tabController.animateTo(1);
+            },
+            onEditFicha: (f) async {
+              final ok = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => EditarFichaScreen(
+                    ficha: f,
+                    aluno: widget.aluno,
                   ),
                 ),
               );
+              if (ok == true) prov.carregarDados();
             },
           ),
-        )
-      ],
+          const _NovoTab(),
+        ],
+      ),
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton.extended(
+        onPressed: _criarFicha,
+        backgroundColor: AppColors.accent,
+        elevation: 4,
+        icon: const Icon(Icons.note_add, color: Colors.white),
+        label: const Text('Nova Ficha',
+            style: TextStyle(color: Colors.white)),
+      )
+          : FloatingActionButton.extended(
+        onPressed: prov.canSave
+            ? () async {
+          final ok = await prov.saveTreino();
+          if (ok) {
+            await prov.carregarDados();
+            _tabController.animateTo(0);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Treino salvo!')),
+            );
+          }
+        }
+            : null,
+        icon: const Icon(Icons.save, color: Colors.white),
+        label: Text('Salvar (${prov.exerciciosSelecionados.length})',
+            style: const TextStyle(color: Colors.white)),
+        backgroundColor:
+        prov.canSave ? AppColors.accent : AppColors.surface,
+      ),
     );
   }
+}
 
-  Widget _buildNovoTreino() {
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 80),
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: TextField(
-            controller: _nomeTreinoController,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              labelText: 'Nome do Treino',
-              labelStyle: TextStyle(color: Colors.white70),
-              filled: true,
-              fillColor: Color(0xFF1E1E1E),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12)),
+// ——————————————————————————————————————
+
+class _HistoricoTab extends StatelessWidget {
+  final Aluno aluno;
+  final VoidCallback onCreateTreino;
+  final void Function(Map<String, dynamic>) onEditFicha;
+
+  const _HistoricoTab({
+    required this.aluno,
+    required this.onCreateTreino,
+    required this.onEditFicha,
+  });
+
+  String _formatDate(String iso) {
+    try {
+      return DateFormat('dd/MM/yyyy').format(DateTime.parse(iso));
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final prov = context.watch<MontarTreinoProvider>();
+
+    if (prov.fichas.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: prov.carregarDados,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 200),
+            Center(
+              child: Text(
+                'Nenhuma ficha encontrada.',
+                style: TextStyle(color: AppColors.onSurfaceLight),
               ),
             ),
-          ),
+          ],
         ),
-        ..._exerciciosPorGrupo.entries.map((e) {
-          return ExerciseGroupTile(
-            groupName: e.key,
-            exercises: e.value,
-            selected: _exerciciosSelecionados,
-            onSelect: (info) {
-              final ex = info['exercicio'] as Map<String, dynamic>;
-              final sel = info['selected'] as bool;
-              setState(() {
-                if (sel) {
-                  if (!_exerciciosSelecionados
-                      .any((e) => e['exercicioId'] == ex['id'])) {
-                    _exerciciosSelecionados.add({
-                      'exercicioId': ex['id'],
-                      'ordem': 1,
-                      'series': 3,
-                      'repeticoes': 10,
-                      'carga': 0,
-                      'observacao': ''
-                    });
-                  }
-                } else {
-                  _exerciciosSelecionados
-                      .removeWhere((x) => x['exercicioId'] == ex['id']);
-                }
-              });
-            },
+      );
+    }
 
+    return RefreshIndicator(
+      onRefresh: prov.carregarDados,
+      child: ListView.builder(
+        itemCount: prov.fichas.length,
+        itemBuilder: (context, i) {
+          final f = prov.fichas[i];
+          final treinos =
+          (f['treinos'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+
+          // determina último treino
+          Map<String, dynamic>? ultimo;
+          if (treinos.isNotEmpty) {
+            ultimo = treinos.reduce((a, b) {
+              final da =
+                  DateTime.tryParse(a['data'] ?? '') ?? DateTime(0);
+              final db =
+                  DateTime.tryParse(b['data'] ?? '') ?? DateTime(0);
+              return da.isAfter(db) ? a : b;
+            });
+          }
+          final dataUlt = ultimo != null
+              ? DateTime.tryParse(ultimo['data'] ?? '')
+              : null;
+          final vencido = dataUlt != null &&
+              DateTime.now().difference(dataUlt).inDays > 40;
+
+          return Card(
+            color: AppColors.surface,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: ExpansionTile(
+              key: ValueKey(f['id']),
+              collapsedIconColor: Colors.white,
+              iconColor: Colors.white,
+              title: Row(
+                children: [
+                  const Icon(Icons.library_books, color: AppColors.accent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      f['descricao'] ?? 'Ficha #${f['id']}',
+                      style: AppTextStyles.titleLarge,
+                    ),
+                  ),
+                  if (prov.fichaSelecionada?['id'] == f['id'])
+                    const Icon(Icons.check_circle, color: AppColors.accent),
+                ],
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+                  Chip(
+                    label: Text(
+                      f['objetivo'] ?? '-',
+                      style: TextStyle(color: AppColors.accent),
+                    ),
+                    backgroundColor: AppColors.accent.withOpacity(0.1),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  if ((f['observacao'] ?? '').toString().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.note,
+                            size: 16, color: AppColors.onSurfaceLight),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            f['observacao'],
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(fontStyle: FontStyle.italic),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (ultimo != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      ultimo['descricao'] ?? '',
+                      style: AppTextStyles.labelLarge
+                          .copyWith(color: Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.calendar_today,
+                            size: 16, color: AppColors.onSurfaceLight),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDate(ultimo['data']),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.onSurfaceLight,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Chip(
+                          label: Text(
+                            vencido ? 'Vencido' : 'Recente',
+                            style:
+                            const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                          backgroundColor:
+                          vencido ? AppColors.error : Colors.green,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.edit, color: AppColors.onSurface),
+                onPressed: () => onEditFicha(f),
+              ),
+              onExpansionChanged: (expanded) {
+                if (expanded) prov.selectFicha(f);
+              },
+              childrenPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.fitness_center, color: Colors.white),
+                    label: const Text('Novo Treino',
+                        style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accent,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      minimumSize: const Size.fromHeight(40),
+                    ),
+                    onPressed: onCreateTreino,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (treinos.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text('Nenhum treino nesta ficha.',
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(color: AppColors.onSurfaceLight)),
+                  )
+                else
+                  ...treinos.map((t) {
+                    final treinoId = t['treinoId'] ?? t['id'];
+                    final dataStr = t['data'] ?? '';
+                    final dt = DateTime.tryParse(dataStr) ?? DateTime(0);
+                    final venc = DateTime.now().difference(dt).inDays > 40;
+                    return ListTile(
+                      tileColor:
+                      venc ? Colors.redAccent.withOpacity(0.2) : null,
+                      title: Text(
+                        t['descricao'] ?? '',
+                        style: TextStyle(
+                          color: venc ? Colors.redAccent : Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        _formatDate(dataStr),
+                        style: TextStyle(
+                          color: venc
+                              ? Colors.redAccent
+                              : AppColors.onSurfaceLight,
+                        ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon:
+                            const Icon(Icons.edit, color: Colors.white),
+                            onPressed: () async {
+                              final ok = await Navigator.push<bool>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EditarTreinoScreen(
+                                    treinoId: treinoId,
+                                    alunoId: aluno.id,
+                                    alunoNome: aluno.nome,
+                                  ),
+                                ),
+                              );
+                              if (ok == true) prov.carregarDados();
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete,
+                                color: Colors.redAccent),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  backgroundColor: AppColors.surface,
+                                  title: const Text('Excluir treino?',
+                                      style: TextStyle(color: Colors.white)),
+                                  content: const Text(
+                                      'Deseja realmente excluir este treino?',
+                                      style: TextStyle(
+                                          color: AppColors.onSurfaceLight)),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text('Não',
+                                          style: TextStyle(
+                                              color: AppColors
+                                                  .onSurfaceLight)),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, true),
+                                      child: const Text('Sim',
+                                          style: TextStyle(
+                                              color: AppColors.accent)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await ApiService.excluirTreino(treinoId);
+                                prov.carregarDados();
+                              }
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.arrow_forward, color: Colors.white),
+                            onPressed: () async {
+                              try {
+                                final detalhe = await ApiService.getTreinoDetalhado(treinoId);
+
+                                // ✅ Inicia o treino
+                                await ApiService.iniciarTreino(
+                                  treinoId: detalhe['treinoId'],
+                                  alunoId: aluno.id,
+                                );
+
+                                // ✅ Salva localmente
+                                await TreinoDestaqueService.adicionarTreinoCompleto({
+                                  'aluno': {
+                                    'id': aluno.id,
+                                    'nome': aluno.nome,
+                                  },
+                                  'treinos': [detalhe],
+                                });
+
+                                // ✅ Vai pra Home
+                                if (!context.mounted) return;
+                                Navigator.pushAndRemoveUntil(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const HomeProfessorScreen()),
+                                      (route) => false,
+                                );
+                              } catch (e) {
+                                debugPrint('Erro ao iniciar treino: $e');
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Erro ao iniciar treino')),
+                                );
+                              }
+                            },
+                          ),
+
+                        ],
+                      ),
+                    );
+                  }).toList(),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _NovoTab extends StatelessWidget {
+  const _NovoTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final prov = context.watch<MontarTreinoProvider>();
+    if (prov.fichaSelecionada == null) {
+      return Center(
+        child: Text(
+          'Selecione uma ficha no Histórico',
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextField(
+          decoration: const InputDecoration(
+            labelText: 'Nome do Treino',
+            labelStyle: TextStyle(color: Colors.white),
+          ),
+          style: const TextStyle(color: Colors.white),
+          onChanged: prov.updateNome,
+        ),
+        const SizedBox(height: 16),
+        ...prov.exerciciosPorGrupo.entries.map((entry) {
+          return ExpansionTile(
+            title: Text(entry.key,
+                style: const TextStyle(color: Colors.white)),
+            iconColor: Colors.white,
+            collapsedIconColor: Colors.white,
+            children: entry.value
+                .map<Widget>((ex) => ExercicioTile(ex: ex))
+                .toList(),
           );
         }).toList(),
       ],
     );
   }
-}
-
-
-class PreviousWorkoutCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final bool mostrarAlteradoPor;
-  final bool usarDataDeRealizacao;
-  final Widget? trailing;
-
-  const PreviousWorkoutCard({
-    super.key,
-    required this.data,
-    this.mostrarAlteradoPor = false,
-    this.usarDataDeRealizacao = false,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final raw = usarDataDeRealizacao
-        ? (data['dataRealizacao'] ?? '')
-        : (data['data'] ?? '');
-
-    DateTime? dt;
-    try {
-      dt = DateTime.parse(raw);
-    } catch (_) {}
-    final formatted = dt != null ? DateFormat('dd/MM/yyyy').format(dt) : raw;
-    final expired = dt != null && DateTime.now().difference(dt).inDays > 40;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        border: expired ? Border.all(color: Colors.red, width: 2) : null,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        title: Text(
-          data['descricao'] ?? '',
-          style: TextStyle(
-            color: expired ? Colors.red : Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              usarDataDeRealizacao
-                  ? 'Realizado em: $formatted'
-                  : 'Criado em: $formatted',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            if (mostrarAlteradoPor && data['alteradoPorNome'] != null)
-              Text(
-                'Alterado por: ${data['alteradoPorNome']}',
-                style: const TextStyle(color: Colors.white70),
-              ),
-          ],
-        ),
-        trailing: trailing,
-      ),
-    );
-  }
-}
-
-
-class ExerciseGroupTile extends StatelessWidget {
-  final String groupName;
-  final List<dynamic> exercises;
-  final List<Map<String, dynamic>> selected;
-  final ValueChanged<Map<String, dynamic>> onSelect;
-
-  const ExerciseGroupTile({
-    super.key,
-    required this.groupName,
-    required this.exercises,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context)
-          .copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        title: Text(groupName,
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold)),
-        iconColor: Colors.orange,
-        collapsedIconColor: Colors.orange,
-        children: exercises
-            .map((ex) => ExerciseItem(
-          data: ex,
-          selectedList: selected,
-          onSelect: onSelect,
-        ))
-            .toList(),
-      ),
-    );
-  }
-}
-
-class ExerciseItem extends StatefulWidget {
-  final Map<String, dynamic> data;
-  final List<Map<String, dynamic>> selectedList;
-  final ValueChanged<Map<String, dynamic>> onSelect;
-
-  const ExerciseItem({
-    super.key,
-    required this.data,
-    required this.selectedList,
-    required this.onSelect,
-  });
-
-  @override
-  State<ExerciseItem> createState() => _ExerciseItemState();
-}
-
-class _ExerciseItemState extends State<ExerciseItem> {
-  late bool _isSelected;
-
-  @override
-  void initState() {
-    super.initState();
-    _isSelected = widget.selectedList
-        .any((e) => e['exercicioId'] == widget.data['id']);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final current = widget.selectedList.firstWhere(
-            (e) => e['exercicioId'] == widget.data['id'],
-        orElse: () => {
-          'exercicioId': widget.data['id'],
-          'ordem': 1,
-          'series': 3,
-          'repeticoes': 10,
-          'carga': 0,
-          'observacao': ''
-        });
-
-    return Column(
-      children: [
-        CheckboxListTile(
-          title: Text(widget.data['nome'],
-              style: const TextStyle(color: Colors.white)),
-          value: _isSelected,
-          activeColor: Colors.orange,
-          checkColor: Colors.black,
-          onChanged: (sel) {
-            setState(() => _isSelected = sel!);
-            widget.onSelect({
-              'exercicio': widget.data,
-              'selected': sel,
-            });
-          },
-        ),
-        if (_isSelected)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ExerciseFields(model: current),
-          ),
-      ],
-    );
-  }
-}
-
-class ExerciseFields extends StatelessWidget {
-  final Map<String, dynamic> model;
-  const ExerciseFields({super.key, required this.model});
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      const SizedBox(height: 8),
-      NumberField(label: 'Ordem', model: model, keyName: 'ordem'),
-      const SizedBox(height: 8),
-      NumberField(label: 'Séries', model: model, keyName: 'series'),
-      const SizedBox(height: 8),
-      NumberField(label: 'Repetições', model: model, keyName: 'repeticoes'),
-      const SizedBox(height: 8),
-      NumberField(label: 'Carga (kg)', model: model, keyName: 'carga'),
-      const SizedBox(height: 8),
-      TextField(
-        style: const TextStyle(color: Colors.white),
-        decoration: const InputDecoration(
-          labelText: 'Observação',
-          labelStyle: TextStyle(color: Colors.white70),
-          filled: true,
-          fillColor: Color(0xFF2C2C2C),
-          border: OutlineInputBorder(),
-        ),
-        onChanged: (v) => model['observacao'] = v,
-      ),
-      const SizedBox(height: 10),
-    ],
-  );
-}
-
-class NumberField extends StatelessWidget {
-  final String label;
-  final Map<String, dynamic> model;
-  final String keyName;
-  const NumberField({
-    super.key,
-    required this.label,
-    required this.model,
-    required this.keyName,
-  });
-
-  @override
-  Widget build(BuildContext context) => TextField(
-    keyboardType: TextInputType.number,
-    style: const TextStyle(color: Colors.white),
-    decoration: InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      filled: true,
-      fillColor: const Color(0xFF2C2C2C),
-      border: const OutlineInputBorder(),
-    ),
-    onChanged: (v) => model[keyName] = int.tryParse(v) ?? model[keyName],
-  );
 }

@@ -1,278 +1,409 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:intl/intl.dart';
+
+import '../../app_theme.dart';
 import '../../services/api_service.dart';
-import '../auth/login_screen.dart';
 import '../../services/auth_service.dart';
+import '../auth/login_screen.dart';
 import '../aluno/cadastro_aluno_screen.dart';
+import '../professor/cadastrar_exercicio_screen.dart';
 import '../professor/cadastro_professor_screen.dart';
 import '../aluno/lista_alunos_screen.dart';
+import '../relatorios/relatrorios_screen.dart';
 import '../treino/treinos_vencidos_screen.dart';
+import '../post/criar_post_screen.dart';
 
 class HomeEmpresaScreen extends StatefulWidget {
-  const HomeEmpresaScreen({super.key});
+  const HomeEmpresaScreen({Key? key}) : super(key: key);
 
   @override
   State<HomeEmpresaScreen> createState() => _HomeEmpresaScreenState();
 }
 
 class _HomeEmpresaScreenState extends State<HomeEmpresaScreen> {
-  List<dynamic> professores = [];
-  bool carregando = true;
+  final _storage = const FlutterSecureStorage();
+  bool _loadingPosts = true;
+  List<Map<String, dynamic>> _posts = [];
+  Map<String, String>? _authHeaders;
 
   @override
   void initState() {
     super.initState();
-    _carregarDados();
+    _initialize();
   }
 
-  Future<void> _carregarDados() async {
-    setState(() => carregando = true);
+  Future<void> _initialize() async {
+    await ApiService.init();
+    _authHeaders = await ApiService.headers();
+    await _fetchPosts();
+  }
+
+  Future<void> _fetchPosts() async {
+    setState(() => _loadingPosts = true);
     try {
-      final dados = await ApiService.getProfessoresComFinalizacoes();
-      setState(() {
-        professores = dados;
-      });
+      final raw = await ApiService.getPostsEmpresa();
+      _posts = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } catch (e) {
-      debugPrint('Erro ao carregar professores: $e');
+      _posts = [];
     } finally {
-      setState(() => carregando = false);
+      setState(() => _loadingPosts = false);
     }
   }
 
-  void _logout(BuildContext context) async {
+  void _logout() async {
     await AuthService().logout();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (route) => false,
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (_) => false,
     );
   }
 
-  void _mostrarAlunosDoProfessor(String nome, String professorCpf) async {
-    showDialog(
+  void _goToCreatePost() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CriarPostScreen()),
+    ).then((_) => _fetchPosts());
+  }
+
+  void _showComments(int postId) {
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: Text('Alunos de $nome', style: const TextStyle(color: Colors.orange)),
-        content: FutureBuilder<List<dynamic>>(
-          future: ApiService.getAlunosFinalizadosPorProfessor(professorCpf),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox(
-                height: 80,
-                child: Center(
-                  child: CircularProgressIndicator(color: Colors.orange),
-                ),
-              );
-            }
-            if (snapshot.hasError) {
-              return const Text('Erro ao carregar alunos', style: TextStyle(color: Colors.red));
-            }
-            final alunos = snapshot.data ?? [];
-            if (alunos.isEmpty) {
-              return const Text('Nenhum aluno finalizou treino hoje',
-                  style: TextStyle(color: Colors.white70));
-            }
-            return SizedBox(
-              width: double.maxFinite,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: alunos.length,
-                itemBuilder: (context, index) {
-                  final aluno = alunos[index];
-                  return ListTile(
-                    title: Text(
-                      aluno['nome'] ?? '',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  );
-                },
-              ),
-            );
-          },
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        builder: (_, controller) => _CommentsViewer(
+          postId: postId,
+          scrollController: controller,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar', style: TextStyle(color: Colors.orange)),
-          )
-        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        title: const Text("Home"),
-        backgroundColor: const Color(0xFF1E1E1E),
-        foregroundColor: Colors.white,
-      ),
-      drawer: Drawer(
-        child: Container(
-          color: const Color(0xFF121212),
-          child: SafeArea(
-            child: Column(
-              children: [
-                const DrawerHeader(
-                  child: Center(
-                    child: Text(
-                      "Menu",
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF6B00),
-                      ),
-                    ),
-                  ),
-                ),
-                _buildDrawerItem(
-                  icon: Icons.person_add,
-                  text: 'Cadastrar Aluno',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            CadastroAlunoScreen(empresaId: ApiService.empresaId),
-                      ),
-                    );
-                  },
-                ),
-                _buildDrawerItem(
-                  icon: Icons.person,
-                  text: 'Cadastrar Professor',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const CadastroProfessorScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _buildDrawerItem(
-                  icon: Icons.list,
-                  text: 'Mostrar Lista de Alunos',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ListaAlunosScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _buildDrawerItem(
-                  icon: Icons.warning,
-                  text: 'Treinos Vencidos',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const TreinosVencidosScreen(),
-                      ),
-                    );
-                  },
-                ),
+    if (_authHeaders == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-                const Spacer(),
-                const Divider(thickness: 1, color: Color(0xFFFF6B00)),
-                _buildDrawerItem(
-                  icon: Icons.logout,
-                  text: 'Logout',
-                  onTap: () => _logout(context),
-                  iconColor: Colors.redAccent,
-                  textColor: Colors.redAccent,
-                ),
-              ],
-            ),
-          ),
-        ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Home Empresa'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'Criar Post',
+            onPressed: _goToCreatePost,
+          )
+        ],
       ),
-      body: carregando
-          ? const Center(
-        child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
-      )
-          : RefreshIndicator(
-        onRefresh: _carregarDados,
-        color: const Color(0xFFFF6B00),
-        child: ListView(
+      drawer: _buildDrawer(),
+      body: RefreshIndicator(
+        color: AppColors.accent,
+        onRefresh: _fetchPosts,
+        child: _loadingPosts
+            ? const Center(
+            child: CircularProgressIndicator(color: AppColors.accent))
+            : _posts.isEmpty
+            ? Center(
+          child: Text(
+            'Nenhum post encontrado.',
+            style: AppTextStyles.bodyMedium,
+          ),
+        )
+            : ListView.builder(
           padding: const EdgeInsets.all(16),
-          children: [
-            const Text(
-              'Professores',
-              style: TextStyle(
-                color: Color(0xFFFF6B00),
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+          itemCount: _posts.length,
+          itemBuilder: (_, index) {
+            final post = _posts[index];
+            final titulo = post['titulo'] as String? ?? '';
+            final nomeEmp = post['nomeEmpresa'] as String? ?? '';
+            final rawDate =
+                post['publicadoEm'] as String? ?? '';
+            final dt = DateTime.tryParse(rawDate) ?? DateTime.now();
+            final dataFormat =
+            DateFormat('dd/MM/yyyy').format(dt);
+            final imagemUrl = post['imagemUrl'] as String?;
+            final curtidas = post['likeCount'] as int? ?? 0;
+            final comentarios = post['commentsCount'] as int? ?? 0;
+            final networkImage = imagemUrl != null
+                ? NetworkImage(imagemUrl, headers: _authHeaders!)
+                : null;
+
+            return Card(
+              color: AppColors.surface,
+              margin: const EdgeInsets.only(bottom: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-            ),
-            const SizedBox(height: 16),
-            ...professores.map((prof) {
-              final nome = prof['nome'] ?? '';
-              final cpf = (prof['cpf'] ?? prof['id']).toString();
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _mostrarAlunosDoProfessor(nome, cpf),
-                        child: Text(
-                          nome,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.underline,
-                          ),
+                    Text(
+                      titulo,
+                      style: AppTextStyles.titleMedium
+                          .copyWith(color: AppColors.accent),
+                    ),
+                    const SizedBox(height: 8),
+                    if (nomeEmp.isNotEmpty)
+                      Text(
+                        nomeEmp,
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(
+                            color: AppColors.onSurface),
+                      ),
+                    if (networkImage != null) ...[
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius:
+                        BorderRadius.circular(8),
+                        child: Image(
+                          image: networkImage,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          loadingBuilder:
+                              (ctx, child, prog) =>
+                          prog == null
+                              ? child
+                              : const SizedBox(
+                              height: 150),
+                          errorBuilder:
+                              (_, __, ___) =>
+                          const SizedBox(),
                         ),
                       ),
+                    ],
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(Icons.thumb_up,
+                            size: 20,
+                            color: AppColors.accent),
+                        const SizedBox(width: 4),
+                        Text('$curtidas'),
+                        const SizedBox(width: 16),
+                        const Icon(Icons.comment,
+                            size: 20,
+                            color: AppColors.accent),
+                        const SizedBox(width: 4),
+                        Text('$comentarios'),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => _showComments(post['id'] as int),
+                          child: const Text(
+                            'Ver comentários',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+
+                      ],
                     ),
+                    const SizedBox(height: 8),
                     Text(
-                      '${prof['qtdFinalizacoesHoje'] ?? 0} treinos',
-                      style: const TextStyle(
-                        color: Colors.orange,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      'Postado em $dataFormat',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(
+                          color:
+                          AppColors.onSurfaceLight),
                     ),
                   ],
                 ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Drawer _buildDrawer() {
+    return Drawer(
+      backgroundColor: AppColors.primary,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: AppColors.surface),
+              child: Center(
+                child: Text(
+                  'Menu',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ),
+            ),
+            _drawerItem(Icons.person_add, 'Cadastrar Aluno', () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) =>
+                        CadastroAlunoScreen(empresaId: ApiService.empresaId)),
               );
-            }).toList(),
+            }),
+            _drawerItem(Icons.person, 'Cadastrar Professor', () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const CadastroProfessorScreen()),
+              );
+            }),
+            _drawerItem(Icons.app_registration, 'Cadastrar Exercício',
+                    () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const CadastrarExercicioScreen()),
+                  );
+                }),
+            _drawerItem(Icons.list, 'Lista de Alunos', () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ListaAlunosScreen()),
+              );
+            }),
+            _drawerItem(Icons.bar_chart, 'Relatórios', () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const RelatoriosScreen()),
+              );
+            }),
+            _drawerItem(Icons.warning, 'Treinos Vencidos', () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const TreinosVencidosScreen()),
+              );
+            }),
+            const Spacer(),
+            const Divider(color: AppColors.accent),
+            _drawerItem(Icons.logout, 'Logout', _logout,
+                iconColor: AppColors.error,
+                textColor: AppColors.error),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDrawerItem({
-    required IconData icon,
-    required String text,
-    required VoidCallback onTap,
-    Color iconColor = const Color(0xFFFF6B00),
-    Color textColor = Colors.white,
-  }) {
+  ListTile _drawerItem(IconData icon, String label, VoidCallback onTap,
+      {Color iconColor = AppColors.accent,
+        Color textColor = AppColors.onSurface}) {
     return ListTile(
       leading: Icon(icon, color: iconColor),
-      title: Text(
-        text,
-        style: TextStyle(color: textColor),
-      ),
+      title: Text(label,
+          style:
+          AppTextStyles.bodyMedium.copyWith(color: textColor)),
       onTap: onTap,
+    );
+  }
+}
+
+/// Apenas visualização de comentários
+class _CommentsViewer extends StatefulWidget {
+  final int postId;
+  final ScrollController scrollController;
+  const _CommentsViewer(
+      {required this.postId, required this.scrollController, Key? key})
+      : super(key: key);
+
+  @override
+  State<_CommentsViewer> createState() => __CommentsViewerState();
+}
+
+class __CommentsViewerState extends State<_CommentsViewer> {
+  bool _loading = true;
+  List<Map<String, dynamic>> _comments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final raw = await ApiService.getComments(widget.postId);
+      _comments =
+          raw.map((e) => Map<String, dynamic>.from(e)).toList();
+    } catch (_) {
+      _comments = [];
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        Container(width: 40, height: 4, color: Colors.grey[300]),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _comments.isEmpty
+              ? Center(
+              child: Text('Nenhum comentário.',
+                  style: AppTextStyles.bodyMedium))
+              : ListView.builder(
+            controller: widget.scrollController,
+            itemCount: _comments.length,
+            itemBuilder: (_, i) {
+              final c = _comments[i];
+              final author = c['nomeAluno'] as String? ?? '';
+              final content = c['conteudo'] as String? ?? '';
+              final when = DateTime.tryParse(
+                  c['comentadoEm'] as String) ??
+                  DateTime.now();
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.primary,
+                  child: Text(
+                    author.isNotEmpty ? author[0] : '?',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+                title: Text(author,
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(fontWeight: FontWeight.bold)),
+                subtitle: Text(content),
+                trailing: Text(
+                  DateFormat('dd/MM/yyyy HH:mm').format(when),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.onSurfaceLight),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
